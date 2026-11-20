@@ -21,12 +21,14 @@ import stat
 
 from .config import _json_object, _reject_constant
 from .storage import atomic_json
-from .strategy import workflow_hash
 
 
 _MAX_BYTES = 8 * 1024 * 1024
 _MAX_RECORDS = 1000
+_MAX_MARGINALS = 64
+_MAX_MARGINAL_CHARACTERS = 24000
 _SCOPE = 'same_fingerprint_hints_only'
+MEASUREMENT_PROTOCOL = 'measurement-scope-v2'
 _HEX = re.compile(r'^[0-9a-f]{64}$')
 _ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$')
 _PROFILE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$')
@@ -48,17 +50,52 @@ def _namespace(value: str) -> str:
     return value
 
 
-def memory_namespace(spec: dict, runtime: dict, frozen: list) -> str:
-    """Use the full workflow, runtime and frozen-file fingerprints conservatively.
+def _measurement_config(config):
+    # Exclude only named top-level orchestration fields. Scenario names, command
+    # arguments, context/model identity and all quality/cache hooks stay frozen.
+    # A future unknown measurement field therefore remains scoped by default.
+    excluded = {'name', 'description', 'llm', 'budget'}
+    return {key: copy.deepcopy(value) for key, value in config.items()
+            if not key.startswith('_') and key not in excluded}
 
-    The workflow hash includes budgets and LLM settings. Changing these also
-    isolates memory, rather than guessing which changes preserve comparability.
-    Runtime/frozen contents are hashed locally; their paths and environment
-    hashes are not exported by ``recall_memory``.
+
+def memory_namespace(spec: dict, runtime: dict, frozen: list) -> str:
+    """Scope hints by measured workload and protocol, not by search organization.
+
+    Names, planner/research settings and search limits can change between new
+    campaigns. Repetition counts, customer gates, approved configurations,
+    runtime and frozen inputs cannot. This is NOT the resume fingerprint: an
+    existing campaign must retain its original inputs and absolute deadline.
+
+    v1 full-workflow namespaces are deliberately not migrated automatically.
+    Runtime fingerprints remain intact, including environment effects caused by
+    an API-key variable being stripped from measurement subprocesses. Paths and
+    environment hashes never appear in ``recall_memory`` observations.
     """
     if not isinstance(runtime, dict) or not isinstance(frozen, list):
         raise ValueError('Memory namespace requires runtime object and frozen-file list')
-    return _hash({'workflow_hash': workflow_hash(spec), 'runtime': runtime, 'frozen': frozen})
+    try:
+        budget = spec['budget']
+        protocol = {key: budget[key] for key in ('repetitions', 'final_repetitions')}
+        # Which finalists are selected is search policy; their verification
+        # method, thresholds and comparison allowance are measurement policy.
+        verification = {key: copy.deepcopy(value) for key, value in spec['verification'].items()
+                        if key != 'confirmation_profiles'}
+        profiles = {}
+        for profile in spec['profiles']:
+            identifier = profile['id']
+            profiles[identifier] = {
+                'catalog': {key: copy.deepcopy(value) for key, value in profile.items()
+                            if key != 'description' and not key.startswith('_')},
+                'measurement': _measurement_config(spec['_profiles'][identifier]),
+            }
+        scope = {'protocol': MEASUREMENT_PROTOCOL, 'sampling': protocol,
+                 'contract': _measurement_config(spec['_contract']),
+                 'profiles': profiles, 'verification': verification,
+                 'runtime': runtime, 'frozen': frozen}
+    except (KeyError, TypeError, AttributeError) as error:
+        raise ValueError('Memory namespace requires a normalized workflow') from error
+    return _hash(scope)
 
 
 def _object(value, keys, label, optional=()):
@@ -93,7 +130,8 @@ def _parameters(value):
 def _validate_record(record):
     _object(record, {'id', 'campaign_id', 'profile_id', 'parameters', 'reference',
                      'verification', 'objective'}, 'Memory record',
-            {'lesson', 'observed_feasible', 'violated_metrics'})
+            {'lesson', 'observed_feasible', 'violated_metrics',
+             'source_workflow_hash', 'measurement_protocol'})
     _identifier(record['id'], _ID, 'Memory record id')
     _identifier(record['campaign_id'], _ID, 'Memory campaign id')
     _identifier(record['profile_id'], _PROFILE, 'Memory profile id')
@@ -104,7 +142,7 @@ def _validate_record(record):
     _parameters(reference['parameters'])
     verification = record['verification']
     _object(verification, {'mode', 'verdict', 'valid', 'accepted', 'improved'}, 'Memory verification')
-    if verification['mode'] not in ('aba', 'single'):
+    if verification['mode'] not in ('aba', 'aba_ci', 'single'):
         raise ValueError('Memory verification mode is invalid')
     if verification['verdict'] not in ('ACCEPTED', 'REJECTED', 'INVALID', 'PENDING'):
         raise ValueError('Memory verification verdict is invalid')
@@ -114,7 +152,7 @@ def _validate_record(record):
         raise ValueError('Memory accepted flag contradicts its verdict')
     if verification['accepted'] and not verification['valid']:
         raise ValueError('Memory cannot accept invalid measurements')
-    if verification['improved'] and not (verification['mode'] == 'aba'
+    if verification['improved'] and not (verification['mode'] in {'aba', 'aba_ci'}
                                        and verification['accepted'] and verification['valid']):
         raise ValueError('Memory improvement requires valid accepted ABA verification')
     if verification['verdict'] in ('INVALID', 'PENDING') and verification['valid']:
@@ -124,7 +162,7 @@ def _validate_record(record):
         raise ValueError('Memory objective must be finite or unknown')
     if verification['accepted'] and objective is None:
         raise ValueError('Memory accepted measurements require an objective')
-    if verification['mode'] == 'aba' and verification['accepted'] and objective <= 0:
+    if verification['mode'] in {'aba', 'aba_ci'} and verification['accepted'] and objective <= 0:
         raise ValueError('Memory accepted ABA objective must be positive')
     if 'observed_feasible' in record:
         feasible = record['observed_feasible']
@@ -146,6 +184,10 @@ def _validate_record(record):
         lesson = record['lesson']
         if not isinstance(lesson, str) or not lesson.strip() or len(lesson) > 1500 or '\x00' in lesson:
             raise ValueError('Memory lesson must be nonempty bounded text')
+    if 'source_workflow_hash' in record:
+        _namespace(record['source_workflow_hash'])
+    if 'measurement_protocol' in record:
+        _identifier(record['measurement_protocol'], _ID, 'Memory measurement protocol')
     # No caller-owned objects are retained or mutated.
     return copy.deepcopy(record)
 
@@ -205,7 +247,7 @@ def _load(path: Path):
 
 def _evidence_level(record):
     verification = record['verification']
-    if verification['mode'] == 'aba' and verification['valid'] and verification['accepted']:
+    if verification['mode'] in {'aba', 'aba_ci'} and verification['valid'] and verification['accepted']:
         return 'independently_confirmed'
     # Invalid infrastructure/reference measurements are not evidence against a
     # strategy. Keep their details, but do not count them as candidate rejection.
@@ -242,13 +284,56 @@ def remember_experiment(path: Path, namespace: str, record: dict) -> dict:
     return {'stored': True, 'record': clean, 'scope': _SCOPE}
 
 
+def _parameter_key(profile_id, name, value):
+    # bool is an int subclass and 1 == 1.0 in Python. A descriptive case bank
+    # must not silently merge the operator's differently typed choices.
+    return profile_id, name, type(value).__name__, _canonical(value)
+
+
+def _marginals(matching, recalled_profiles):
+    selected, truncated = {}, False
+    # Keep recent parameter choices useful to the bounded observation. Count
+    # their outcomes over all retained matching records, not just this tail.
+    for record in reversed(matching):
+        if record['profile_id'] not in recalled_profiles:
+            continue
+        for name, value in sorted(record['parameters'].items()):
+            key = _parameter_key(record['profile_id'], name, value)
+            if key in selected:
+                continue
+            if len(selected) >= _MAX_MARGINALS:
+                truncated = True
+                continue
+            selected[key] = {'profile_id': record['profile_id'], 'parameter': name,
+                             'value_type': type(value).__name__, 'value': value,
+                             'observed_count': 0, 'observed_infeasible_count': 0,
+                             'confirmed_count': 0, 'improved_count': 0}
+    for record in matching:
+        confirmed = _evidence_level(record) == 'independently_confirmed'
+        for name, value in record['parameters'].items():
+            cell = selected.get(_parameter_key(record['profile_id'], name, value))
+            if cell is None:
+                continue
+            cell['observed_count'] += 1
+            cell['observed_infeasible_count'] += record.get('observed_feasible') is False
+            cell['confirmed_count'] += confirmed
+            cell['improved_count'] += confirmed and record['verification']['improved']
+    rows = list(selected.values())
+    while len(_canonical(rows)) > _MAX_MARGINAL_CHARACTERS:
+        rows.pop()
+        truncated = True
+    return rows, truncated
+
+
 def recall_memory(path: Path, namespace: str, limit: int = 12) -> dict:
-    """Return only matching, bounded hints and descriptive profile counts.
+    """Return matching hints and descriptive profile/typed-parameter counts.
 
     Counts describe retained experiments, not a calibrated probability model.
     Priors cover profiles present in the recalled records and count all retained
     matching experiments for those profiles.
     Confirmation labels describe historical evidence, not today's acceptance.
+    Marginals condition on profile and parameter value, not on every other knob
+    or incumbent. They are associations, never causal parameter success rates.
     """
     namespace = _namespace(namespace)
     if type(limit) is not int or not 1 <= limit <= 100:
@@ -277,4 +362,7 @@ def recall_memory(path: Path, namespace: str, limit: int = 12) -> dict:
     records = [dict(copy.deepcopy(record), evidence_level=_evidence_level(record))
                for record in reversed(matching[-limit:])]
     recalled_profiles = {record['profile_id'] for record in records}
-    return {'records': records, 'priors': [priors[key] for key in sorted(recalled_profiles)], 'scope': _SCOPE}
+    marginals, truncated = _marginals(matching, recalled_profiles)
+    return {'records': records, 'priors': [priors[key] for key in sorted(recalled_profiles)],
+            'marginals': marginals, 'marginals_truncated': truncated,
+            'marginals_scope': 'descriptive_not_causal', 'scope': _SCOPE}

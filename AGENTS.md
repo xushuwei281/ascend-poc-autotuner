@@ -26,8 +26,9 @@ This project does not currently port either project's accelerator engine.
 | Persistent Agent and budgets | `rsi.py`, `rsi_config.py` |
 | Agent decisions, experiments and memory | `rsi_planner.py`, `rsi_experiment.py`, `rsi_memory.py` |
 | Frozen contracts and strategy catalog | `config.py`, `strategy.py` |
-| Research and slow-loop strategy selection | `deepwiki.py`, `a2a.py`, `workflow_planner.py` |
-| Measurement and acceptance | `runner.py`, `metrics.py`, `verification.py` |
+| Research and slow-loop strategy selection | `deepwiki.py`, `a2a.py`, `rsi_research.py`, `workflow_planner.py` |
+| Measurement and acceptance | `runner.py`, `metrics.py`, `verification.py`, `confirmation.py` |
+| Confirmation costs and optional block statistics | `budget.py`, `statistics_ci.py` |
 | Orchestration and audit | `workflow.py`, `audit.py`, `provenance.py` |
 | Historical reporting | `reporting.py`, `report.py` |
 | Agent request replay and observation | `replay.py`, `workload.py`, `diagnosis.py` |
@@ -43,10 +44,23 @@ Paths in the table are under `ascend_poc/`.
   generation. Never promote a result measured against an obsolete reference.
 - Keep generation monotonic, including rollback. Rollback changes the next
   experiment reference and exports; it never operates a production deployment.
-- Memory is untrusted candidate guidance, not reusable acceptance. Keep workflow,
-  runtime and frozen-input namespaces separate; lessons cannot rewrite metrics.
+- Memory is untrusted candidate guidance, not reusable acceptance. Keep measurement
+  protocol, runtime and frozen-input namespaces separate; lessons cannot rewrite
+  metrics. Search settings can be excluded only field by field; repetition counts
+  and verification rules belong to the measurement scope. Resume remains strict.
 - Bound tool steps, model/research calls, experiments and the absolute deadline.
   Resume pending work without resetting budgets or manufacturing success.
+- Cost estimates distinguish startup from repeat-dependent measurements. A skipped
+  confirmation is not a rejected or accepted independent result. Exploration early
+  stop preserves partial evidence and never applies to references or confirmation.
+- In `aba_ci`, preserve the planned block count and comparison cap, use independent
+  service-start blocks rather than within-start repetitions as the statistical
+  samples, and retain both within-block and between-block drift checks. Report
+  log-ratio estimates separately from the customer's original objective values.
+- Deduplicate integrity work only within one check; reread on later checks. Keep
+  authoritative state bound to its trace checkpoint and revoke exports on errors.
+- An ignore-memory run must neither read nor write persistent experience. Its own
+  current-campaign measurements remain visible, and the mode is frozen on resume.
 - Keep commands operator-authored and executed as argv, without a shell.
 - LLMs select allowed, verified profiles; research text cannot add executable code.
 - Never turn absent cache or token telemetry into a measured zero.

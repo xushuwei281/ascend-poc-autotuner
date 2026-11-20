@@ -56,6 +56,17 @@ def _saved_workflow(output: Path, state: dict) -> dict:
         raise ValueError('Workflow trace does not match its saved checkpoint')
     if state.get('integrity_valid') is not True:
         raise ValueError('Workflow inputs were invalidated; cannot regenerate an accepted result')
+    if spec['verification']['mode'] in {'aba', 'aba_ci'}:
+        from .confirmation import revalidate_confirmation
+        contract = dict(spec['_contract'], budget=spec['budget'])
+        for trial in state['trials']:
+            stored = trial.get('verification', {})
+            if trial['phase'] != 'confirmation' or stored.get('verdict') in {None, 'PENDING'}:
+                continue
+            actual = revalidate_confirmation(contract, state['trials'], trial,
+                                             spec['verification'], spec['profiles'][0]['id'])
+            if actual != stored:
+                raise ValueError('Saved independent ABA/CI verdict does not match raw measurements')
     return spec
 
 

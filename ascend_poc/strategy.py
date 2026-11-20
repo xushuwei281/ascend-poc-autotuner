@@ -22,7 +22,8 @@ from .config import (
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _REPLACEMENTS = ("server", "search_space", "baseline", "constraints")
-_BUDGET_KEYS = {"max_trials", "max_wall_time_s", "repetitions", "final_repetitions", "finalists"}
+_BUDGET_KEYS = {"max_trials", "max_wall_time_s", "repetitions", "final_repetitions", "finalists",
+                "early_stop", "confirmation_reserve", "cost_safety_factor", "estimated_trial_s"}
 _REPOSITORY = "vllm-project/vllm-ascend"
 
 
@@ -96,12 +97,29 @@ def load_workflow(path: str | Path) -> dict:
     _keys(budget, _BUDGET_KEYS, "workflow.budget")
     spec["budget"] = {**contract["budget"], **budget}
     for key, value in spec["budget"].items():
-        _number(value, f"workflow.budget.{key}", minimum=.01 if key == "max_wall_time_s" else 1, integer=key != "max_wall_time_s")
+        if key in {"early_stop", "confirmation_reserve"}:
+            if type(value) is not bool:
+                raise ValueError(f"workflow.budget.{key} must be boolean")
+        else:
+            seconds = key in {"max_wall_time_s", "estimated_trial_s"}
+            _number(value, f"workflow.budget.{key}", minimum=.01 if seconds else 1,
+                    integer=not seconds and key != "cost_safety_factor")
 
     verification = _object(spec.setdefault("verification", {}), "workflow.verification")
-    _keys(verification, {"mode", "max_baseline_drift", "min_relative_improvement", "drift_multiplier", "frozen_files"}, "workflow.verification")
-    if verification.setdefault("mode", "single") not in {"single", "aba"}:
-        raise ValueError("workflow.verification.mode must be single or aba")
+    _keys(verification, {"mode", "max_baseline_drift", "min_relative_improvement", "drift_multiplier", "frozen_files",
+                         "confirmation_profiles", "ci_blocks", "ci_confidence", "ci_max_comparisons"}, "workflow.verification")
+    if verification.setdefault("mode", "single") not in {"single", "aba", "aba_ci"}:
+        raise ValueError("workflow.verification.mode must be single, aba or aba_ci")
+    if verification['mode'] == 'aba_ci':
+        _number(verification.setdefault('ci_blocks', 5), 'verification.ci_blocks', minimum=3, maximum=100, integer=True)
+        _number(verification.setdefault('ci_confidence', .95), 'verification.ci_confidence', minimum=.5, maximum=1)
+        if not .5 < verification['ci_confidence'] < 1:
+            raise ValueError('verification.ci_confidence must be between 0.5 and 1 exclusively')
+        _number(verification.setdefault('ci_max_comparisons', 8), 'verification.ci_max_comparisons', minimum=1, maximum=10000, integer=True)
+        if spec['budget']['finalists'] > verification['ci_max_comparisons']:
+            raise ValueError('finalists exceeds the predeclared CI comparison budget')
+    elif any(key.startswith('ci_') for key in verification):
+        raise ValueError('ci settings require verification.mode=aba_ci')
     for key, default in (("max_baseline_drift", .05), ("min_relative_improvement", .02), ("drift_multiplier", 2.0)):
         _number(verification.setdefault(key, default), f"workflow.verification.{key}", minimum=0)
     if verification["max_baseline_drift"] > 1:
@@ -181,6 +199,12 @@ def load_workflow(path: str | Path) -> dict:
         configs[name] = candidate
     if not profiles[0]["enabled"] or profiles[0]["compatibility"]["status"] != "verified":
         raise ValueError("the first profile is the baseline and must be enabled and verified")
+    if 'confirmation_profiles' in verification:
+        selected = verification['confirmation_profiles']
+        allowed = {p['id'] for p in profiles if p['enabled'] and p['compatibility']['status'] == 'verified'}
+        if (not isinstance(selected, list) or not selected or any(not isinstance(p, str) or p not in allowed for p in selected)
+                or len(set(selected)) != len(selected)):
+            raise ValueError('verification.confirmation_profiles must name unique eligible profiles')
     # Prevent misleading baseline labels that actually run a modified strategy.
     first = configs[profiles[0]["id"]]
     if any(first[key] != contract[key] for key in _REPLACEMENTS):
@@ -199,7 +223,8 @@ def eligible_profiles(spec: dict) -> list[dict]:
 
 def materialize_profile(spec: dict, profile_id: str, parameters: dict | None = None) -> dict:
     """Resolve an allowed profile without ever modifying the acceptance matrix."""
-    eligible = {profile["id"] for profile in eligible_profiles(spec)}
+    eligible = {profile["id"] for profile in spec["profiles"]
+                if profile["enabled"] and profile["compatibility"]["status"] == "verified"}
     if profile_id not in eligible:
         raise ValueError("profile is unknown, disabled or has unverified compatibility")
     config = copy.deepcopy(spec["_profiles"][profile_id])

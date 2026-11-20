@@ -79,6 +79,55 @@ def normalize_metrics(raw: dict, metrics_format: str = "canonical") -> dict:
     return result
 
 
+def evaluate_repetition(config: dict, scenario: dict, metrics: dict, repetition: int = 1) -> dict:
+    """Evaluate only one observed repetition, without inventing missing runs.
+
+    This is shared by full-matrix acceptance and exploration-only early stopping.
+    Missing/non-finite required metrics or objective values in this observed run
+    fail, while scenarios and repetitions not yet executed are not inspected.
+    """
+    name = scenario['name']
+    checks, failures, violated_metrics = [], [], []
+    violation = 0.0
+    if not isinstance(metrics, dict):
+        return {'checks': [], 'failures': [f'{name} repetition {repetition}: invalid metrics'],
+                'violation': 1.0, 'objective': None, 'violated_metrics': []}
+    limits = {**config.get('requirements', {}), **scenario.get('requirements', {})}
+    for metric, requirement in limits.items():
+        value = metrics.get(metric)
+        valid = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+        passed = valid
+        deficit = 0.0
+        if valid:
+            if 'min' in requirement and value < requirement['min']:
+                passed = False
+                deficit += min(1e12, (requirement['min'] - value) / max(abs(requirement['min']), 1.0))
+            if 'max' in requirement and value > requirement['max']:
+                passed = False
+                deficit += min(1e12, (value - requirement['max']) / max(abs(requirement['max']), 1.0))
+        else:
+            deficit = 1.0
+        checks.append({'scenario': name, 'repetition': repetition, 'metric': metric,
+                       'value': value if valid else None, 'pass': bool(passed),
+                       'requirement': dict(requirement)})
+        if not passed:
+            failures.append(f"{name} repetition {repetition}: {metric} {'outside requirement' if valid else 'missing or non-finite'}")
+            violated_metrics.append(metric)
+            violation += deficit
+    objective_metric = config['objective']['metric']
+    objective_value = metrics.get(objective_metric)
+    if not (isinstance(objective_value, (int, float)) and not isinstance(objective_value, bool)
+            and math.isfinite(objective_value)):
+        objective_value = None
+        failures.append(f'{name} repetition {repetition}: objective {objective_metric} missing or non-finite')
+        if objective_metric not in violated_metrics:
+            violated_metrics.append(objective_metric)
+        violation += 1
+    return {'checks': checks, 'failures': failures, 'violation': float(violation),
+            'objective': float(objective_value) if objective_value is not None else None,
+            'violated_metrics': violated_metrics}
+
+
 def evaluate_trial(config: dict, scenario_results: list[dict], expected_repetitions: int | None = None) -> dict:
     """Apply all hard gates to all runs and aggregate only the objective.
 
@@ -106,7 +155,6 @@ def evaluate_trial(config: dict, scenario_results: list[dict], expected_repetiti
             continue
         by_name[name] = item
 
-    objective_metric = config["objective"]["metric"]
     for scenario in config["scenarios"]:
         name = scenario["name"]
         item = by_name.get(name, {})
@@ -118,37 +166,14 @@ def evaluate_trial(config: dict, scenario_results: list[dict], expected_repetiti
         if len(repetitions) != expected:
             failures.append(f"{name}: expected {expected} repetitions, received {len(repetitions)}")
             violation += 1
-        limits = {**config.get("requirements", {}), **scenario.get("requirements", {})}
         values = []
         for index, metrics in enumerate(repetitions, start=1):
-            if not isinstance(metrics, dict):
-                failures.append(f"{name} repetition {index}: invalid metrics")
-                violation += 1
-                continue
-            for metric, requirement in limits.items():
-                value = metrics.get(metric)
-                valid = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
-                passed = valid
-                deficit = 0.0
-                if valid:
-                    if "min" in requirement and value < requirement["min"]:
-                        passed = False
-                        deficit += min(1e12, (requirement["min"] - value) / max(abs(requirement["min"]), 1.0))
-                    if "max" in requirement and value > requirement["max"]:
-                        passed = False
-                        deficit += min(1e12, (value - requirement["max"]) / max(abs(requirement["max"]), 1.0))
-                else:
-                    deficit = 1.0
-                checks.append({"scenario": name, "repetition": index, "metric": metric, "value": value if valid else None, "pass": bool(passed), "requirement": dict(requirement)})
-                if not passed:
-                    failures.append(f"{name} repetition {index}: {metric} {'outside requirement' if valid else 'missing or non-finite'}")
-                    violation += deficit
-            objective_value = metrics.get(objective_metric)
-            if isinstance(objective_value, (int, float)) and not isinstance(objective_value, bool) and math.isfinite(objective_value):
-                values.append(float(objective_value))
-            else:
-                failures.append(f"{name} repetition {index}: objective {objective_metric} missing or non-finite")
-                violation += 1
+            observed = evaluate_repetition(config, scenario, metrics, index)
+            checks.extend(observed['checks'])
+            failures.extend(observed['failures'])
+            violation += observed['violation']
+            if observed['objective'] is not None:
+                values.append(observed['objective'])
         if len(values) == len(repetitions):
             objectives[name] = statistics.median(values)
 

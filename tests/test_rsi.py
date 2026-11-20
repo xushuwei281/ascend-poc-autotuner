@@ -66,7 +66,7 @@ class RSIControllerTests(TestCase):
         planner = planner or ScriptedPlanner(actions)
         researcher = researcher or fixtures.ResearchDouble()
         with patch('ascend_poc.rsi._runtime', return_value={'fixture': 1}), \
-             patch('ascend_poc.workflow.runtime_signature', return_value={'fixture': 1}), \
+             patch('ascend_poc.workflow.runtime_signatures', side_effect=lambda configs: {key: {'fixture': 1} for key in configs}), \
              patch('ascend_poc.workflow.run_trial', side_effect=runner or self.fixture.runner) as hardware, \
              redirect_stdout(io.StringIO()):
             state = run_agent(self.config, output or self.output, resume=resume,

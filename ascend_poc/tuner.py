@@ -10,6 +10,7 @@ import random
 import time
 
 from .config import config_hash, validate_candidate
+from .budget import confirmation_cost, preflight, search_cutoff, trial_cost
 from .llm import LLMError, LLMPlanner
 from .metrics import evaluate_trial
 from .provenance import runtime_signature
@@ -91,7 +92,8 @@ def _tune(config: dict, output: Path, planner_name: str, resume: bool) -> dict:
     deadline = time.monotonic() + remaining
     # Reserve the last quarter of the original wall-time budget for confirmation.
     search_remaining = max(0.0, state['started_epoch'] + config['budget']['max_wall_time_s'] * .75 - time.time())
-    search_deadline = min(deadline, time.monotonic() + search_remaining)
+    legacy_search_deadline = min(deadline, time.monotonic() + search_remaining)
+    search_deadline = legacy_search_deadline
 
     def persist():
         state['elapsed_s'] = max(0, time.time() - state['started_epoch'])
@@ -105,10 +107,15 @@ def _tune(config: dict, output: Path, planner_name: str, resume: bool) -> dict:
         state['trials'].append(record)
         persist()
         try:
-            data = run_trial(config, parameters, output / 'trials' / trial_id, limit, repeats)
+            options = {'phase': phase} if phase == 'exploration' and config['budget'].get('early_stop', False) else {}
+            data = run_trial(config, parameters, output / 'trials' / trial_id, limit, repeats, **options)
             record['scenario_results'] = data
             record['evaluation'] = evaluate_trial(config, data, expected_repetitions=repeats)
-            record['status'] = 'completed'
+            record['status'] = getattr(data, 'status', 'completed')
+            if getattr(data, 'timings', None):
+                record['timings'] = data.timings
+            if getattr(data, 'aborted_after', None):
+                record['aborted_after'] = data.aborted_after
         except (RunnerError, ValueError, OSError) as error:
             record['status'] = 'failed'
             # Fixed diagnostic category, not raw process/API output that could contain secrets.
@@ -126,8 +133,14 @@ def _tune(config: dict, output: Path, planner_name: str, resume: bool) -> dict:
     state['status'] = 'running'
     persist()
     try:
-        while sum(t['phase'] == 'exploration' for t in state['trials']) < config['budget']['max_trials'] and time.monotonic() < search_deadline:
+        while sum(t['phase'] == 'exploration' for t in state['trials']) < config['budget']['max_trials'] and time.monotonic() < deadline:
             explored = [t for t in state['trials'] if t['phase'] == 'exploration']
+            search_deadline, reserve = search_cutoff(deadline, legacy_search_deadline, state['trials'],
+                config['budget'], {'mode': 'single'}, None, [None] * config['budget']['finalists'])
+            if time.monotonic() >= search_deadline:
+                if reserve:
+                    state['events'].append({'type': 'confirmation_budget_reserved', 'estimate': reserve})
+                break
             if not explored:
                 parameters = dict(config['baseline'])
                 hypothesis = 'Frozen baseline'
@@ -158,6 +171,11 @@ def _tune(config: dict, output: Path, planner_name: str, resume: bool) -> dict:
                     break
             if time.monotonic() >= search_deadline:
                 break
+            if explored and config['budget'].get('confirmation_reserve', False):
+                cost = trial_cost(state['trials'], None, config['budget']['repetitions'], config['budget'])
+                if cost['seconds'] is not None and cost['seconds'] * config['budget'].get('cost_safety_factor', 1.25) > search_deadline - time.monotonic():
+                    state['events'].append({'type': 'exploration_skipped_insufficient_budget', 'estimate': cost})
+                    break
             measure(parameters, hypothesis, 'exploration', config['budget']['repetitions'], search_deadline)
         qualified = [t for t in state['trials'] if t['phase'] == 'exploration' and t['status'] == 'completed' and t['evaluation']['feasible']]
         qualified.sort(key=lambda t: rank_key(t, config['objective']['direction']), reverse=True)
@@ -167,6 +185,14 @@ def _tune(config: dict, output: Path, planner_name: str, resume: bool) -> dict:
                 break
             if parameter_hash(candidate['parameters']) in confirmed_hashes:
                 continue
+            if config['budget'].get('confirmation_reserve', False):
+                estimate = confirmation_cost(state['trials'], config['budget'], {'mode': 'single'}, None, [None])
+                estimate = preflight(deadline - time.monotonic(), estimate)
+                state['events'].append({'type': 'verification_budget_preflight', 'candidate_id': candidate['id'], 'estimate': estimate})
+                if not estimate['can_start']:
+                    state['events'].append({'type': 'skipped_insufficient_budget', 'candidate_id': candidate['id'], 'estimate': estimate})
+                    persist()
+                    continue
             measure(candidate['parameters'], f"Independent repeat confirmation of {candidate['id']}", 'confirmation', config['budget']['final_repetitions'], deadline)
         state['status'] = 'completed'
     except KeyboardInterrupt:

@@ -102,7 +102,7 @@ class WorkflowTests(unittest.TestCase):
 
     def execute(self, *, runner=None, planner=None, researcher=None, resume=False, runtime=None):
         with patch('ascend_poc.workflow.run_trial', side_effect=runner or self.runner) as hardware, \
-             patch('ascend_poc.workflow.runtime_signature', return_value=runtime or {'fixture': 1}), \
+             patch('ascend_poc.workflow.runtime_signatures', side_effect=lambda configs: {key: runtime or {'fixture': 1} for key in configs}), \
              redirect_stdout(io.StringIO()):
             state = run_workflow(self.spec, self.output, resume=resume,
                                  planner=planner or PlannerDouble(),

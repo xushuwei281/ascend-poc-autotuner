@@ -92,7 +92,7 @@ def analyze_trial(record: dict, contract: dict) -> dict:
     again instead of trusting a supplied ``pass`` flag.
     """
     status = record.get("status")
-    status = status if status in {"completed", "failed", "interrupted", "running"} else "unknown"
+    status = status if status in {"completed", "infeasible_early", "failed", "interrupted", "running"} else "unknown"
     evaluation = record.get("evaluation")
     evaluation = evaluation if isinstance(evaluation, dict) else {}
     objective = evaluation.get("objective")

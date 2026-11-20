@@ -37,7 +37,9 @@ class RSIMemoryTests(unittest.TestCase):
 
     def test_missing_memory_is_empty_not_evidence(self):
         found = recall_memory(self.path, self.namespace)
-        self.assertEqual(found, {'records': [], 'priors': [], 'scope': 'same_fingerprint_hints_only'})
+        self.assertEqual(found, {'records': [], 'priors': [], 'scope': 'same_fingerprint_hints_only',
+                                 'marginals': [], 'marginals_truncated': False,
+                                 'marginals_scope': 'descriptive_not_causal'})
         self.assertFalse(self.path.exists())
 
     def test_namespace_tracks_workflow_runtime_and_frozen_inputs(self):
@@ -47,7 +49,7 @@ class RSIMemoryTests(unittest.TestCase):
         for changed, runtime, frozen in (
             (spec, {'python': '3.11', 'devices': [0]}, []),
             (spec, {'python': '3.12', 'devices': [0]}, [{'sha256': 'b' * 64}]),
-            (dict(spec, budget=dict(spec['budget'], max_trials=99)), {'python': '3.12', 'devices': [0]}, []),
+            (dict(spec, budget=dict(spec['budget'], repetitions=99)), {'python': '3.12', 'devices': [0]}, []),
         ):
             self.assertNotEqual(expected, memory_namespace(changed, runtime, frozen))
         with self.assertRaises(ValueError):

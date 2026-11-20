@@ -31,7 +31,8 @@ class WorkflowVerificationTests(TestCase):
             return measured(config, parameters, repeats)
 
         with patch('ascend_poc.workflow.run_trial', side_effect=runner or default_runner) as hardware, \
-             patch('ascend_poc.workflow.runtime_signature', side_effect=runtime or (lambda _config: {'fixture': 1})), \
+             patch('ascend_poc.workflow.runtime_signatures', side_effect=lambda configs: {
+                 key: (runtime(config) if runtime else {'fixture': 1}) for key, config in configs.items()}), \
              redirect_stdout(io.StringIO()):
             self.hardware = hardware
             if clock:

@@ -94,7 +94,7 @@ def _analysis_summary(analysis: dict, config: dict) -> dict:
     result = {}
     if isinstance(analysis.get("trial_id"), str) and _IDENTIFIER.fullmatch(analysis["trial_id"]):
         result["trial_id"] = analysis["trial_id"]
-    if analysis.get("status") in {"completed", "failed", "interrupted", "running", "unknown"}:
+    if analysis.get("status") in {"completed", "infeasible_early", "failed", "interrupted", "running", "unknown"}:
         result["status"] = analysis["status"]
     if isinstance(analysis.get("feasible"), bool):
         result["feasible"] = analysis["feasible"]

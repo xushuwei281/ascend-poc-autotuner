@@ -20,7 +20,7 @@ from .rsi_config import load_agent
 from .storage import atomic_json
 
 
-def run_agent_demo(output: Path) -> dict:
+def run_agent_demo(output: Path, *, verification_mode='aba') -> dict:
     """Run an actual local HTTP/subprocess campaign with synthetic measurements."""
     # Imported here so the demo module remains a lightweight CLI dependency.
     from .rsi import run_agent
@@ -146,7 +146,8 @@ def run_agent_demo(output: Path) -> dict:
             'Synthetic fixture only; this is not evidence of hardware compatibility']}
         workflow = {
             'schema_version': 1, 'name': 'Synthetic RSI strategy catalog',
-            'contract': 'contract.json', 'verification': {'mode': 'aba'},
+            'contract': 'contract.json', 'verification': {'mode': verification_mode},
+            'budget': {'early_stop': True, 'confirmation_reserve': True, 'cost_safety_factor': 1.25},
             'research': {'transport': 'a2a', 'endpoint': bridge.endpoint,
                          'timeout_s': 5, 'max_calls': 3, 'on_error': 'stop'},
             'profiles': [
@@ -156,13 +157,15 @@ def run_agent_demo(output: Path) -> dict:
                  'server': alternate, 'compatibility': compatibility},
             ],
         }
+        if verification_mode == 'aba_ci':
+            workflow['verification'].update(ci_blocks=5, ci_confidence=.95, ci_max_comparisons=3)
         config = {
             'schema_version': 1, 'name': 'Synthetic bounded Inference RSI Agent',
             'goal': 'Exercise real research and experiment tools; promote only a verified improvement '
                     'and retain a failed candidate as a synthetic counterexample.',
             'workflow': 'workflow.json', 'memory_file': '../memory.json',
             'settings': {'max_steps': 20, 'max_experiments': 3, 'max_wall_time_s': 180,
-                         'experiment_timeout_s': 60, 'max_llm_calls': 30,
+                         'experiment_timeout_s': 120 if verification_mode == 'aba_ci' else 60, 'max_llm_calls': 30,
                          'max_research_calls': 3, 'max_consecutive_tool_errors': 3},
         }
         atomic_json(inputs / 'contract.json', contract)

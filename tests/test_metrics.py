@@ -1,7 +1,7 @@
 import copy
 import unittest
 
-from ascend_poc.metrics import evaluate_trial, normalize_metrics
+from ascend_poc.metrics import evaluate_repetition, evaluate_trial, normalize_metrics
 
 
 def contract():
@@ -21,6 +21,25 @@ def results():
 
 
 class MetricTests(unittest.TestCase):
+    def test_observed_repetition_ignores_unexecuted_matrix_and_uses_scenario_override(self):
+        config = contract()
+        observed = evaluate_repetition(config, config['scenarios'][1], results()[1]['metrics'][0], 1)
+        self.assertEqual(observed['failures'], [])
+        self.assertEqual(observed['violated_metrics'], [])
+        self.assertEqual(observed['objective'], 60)
+        self.assertEqual(len(observed['checks']), 2)
+
+    def test_observed_repetition_keeps_missing_and_nonfinite_failure_semantics(self):
+        config = contract()
+        for value in (None, float('nan'), float('inf'), True):
+            with self.subTest(value=value):
+                metrics = {'p99_ttft_ms': value, 'error_rate': 0}
+                observed = evaluate_repetition(config, config['scenarios'][0], metrics, 2)
+                self.assertEqual(observed['violated_metrics'], ['p99_ttft_ms', 'output_tokens_per_second'])
+                self.assertIsNone(observed['checks'][0]['value'])
+                self.assertFalse(observed['checks'][0]['pass'])
+                self.assertIsNone(observed['objective'])
+
     def test_vllm_aliases_counts_and_percentiles(self):
         normalized = normalize_metrics({"completed": 99, "failed": 1, "output_throughput": 1234, "request_throughput": 12, "percentiles_ttft_ms": [[95, 40], [99, 50]], "quality_score": 0.94, "model": "metadata"}, "vllm")
         self.assertEqual(normalized["output_tokens_per_second"], 1234)

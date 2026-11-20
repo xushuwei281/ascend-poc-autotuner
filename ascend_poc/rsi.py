@@ -16,12 +16,13 @@ import time
 import uuid
 
 from .audit import append_trace, read_trace, verify_frozen_files
-from .llm import LLMError, _metadata
-from .provenance import runtime_signature
+from .llm import LLMError
+from .provenance import runtime_signatures
 from .report import _cell
 from .rsi_config import agent_hash, digest, read_json
 from .rsi_experiment import run_experiment, read_experiment
-from .rsi_memory import memory_namespace, recall_memory, remember_experiment
+from .rsi_memory import MEASUREMENT_PROTOCOL, memory_namespace, recall_memory, remember_experiment
+from .rsi_research import research_question
 from .rsi_planner import RSIPlanner, validate_action
 from .storage import atomic_json
 from .strategy import eligible_profiles, materialize_profile, workflow_hash
@@ -51,8 +52,8 @@ def _output_lock(output):
 
 
 def _runtime(spec):
-    return {p['id']: runtime_signature(materialize_profile(spec, p['id']))
-            for p in eligible_profiles(spec)}
+    return runtime_signatures({p['id']: materialize_profile(spec, p['id'])
+                               for p in eligible_profiles(spec)})
 
 
 def _frozen(spec):
@@ -147,6 +148,9 @@ def _model_state(state, settings, remaining_s):
     memory = copy.deepcopy(state['memory'])
     memory['records'] = memory.get('records', [])[:6]  # recall is newest-first
     memory['priors'] = memory.get('priors', [])[:40]
+    if len(memory.get('marginals', [])) > 32:
+        memory['marginals_truncated'] = True
+    memory['marginals'] = memory.get('marginals', [])[:32]
     for record in memory['records']:
         if record.get('lesson'):
             record['lesson'] = record['lesson'][:500]
@@ -165,6 +169,9 @@ def _model_state(state, settings, remaining_s):
     while len(json.dumps(result, ensure_ascii=False, allow_nan=False)) > 80000:
         if memory['records']:
             memory['records'].pop()
+        elif memory['marginals']:
+            memory['marginals'].pop()
+            memory['marginals_truncated'] = True
         elif evidence:
             evidence.pop(0)
         elif len(views) > 1:
@@ -187,15 +194,31 @@ def _write_report(output, state):
              f"- 状态：{state['status']}；停止原因：{_cell(state.get('stop_reason', ''))}",
              f"- 当前代际：{state['generation']}；步骤：{state['steps']}；LLM HTTP 尝试：{state['llm_calls']}",
              f"- 研究调用：{state['research_calls']}；实验：{len(state['experiments'])}",
+             f"- 历史经验模式：{state.get('memory_mode', 'enabled')}；当前任务实验仍保留",
              f"- 输入完整性：{state['integrity_valid']}；独立确认的当前配置：{bool(state['champion'].get('experiment_id'))}",
              '', '| 实验 | 父代 | 策略 | 完成 | 目标 | ABA | 已验收 | 有效提升 |',
              '|---|---:|---|---|---:|---|---|---|']
+    ci_lines = []
     for record in state['experiments']:
         view = _experiment_view(record)
         verification = view['verification']
         lines.append('| ' + ' | '.join(_cell(x) for x in [record['id'], record['source_generation'],
                      record['candidate']['profile_id'], record['status'], view['evaluation']['objective'],
                      verification['verdict'], verification['accepted'], verification['improved']]) + ' |')
+        result = record.get('result', {}).get('verification', {})
+        if result.get('mode') == 'aba_ci':
+            ci_lines.append(f"{_cell(record['id'])}：跨块效果点估计 {_cell(result.get('relative_improvement'))}；"
+                         f"同时单侧置信下界 {_cell(result.get('relative_improvement_lower_bound'))}；"
+                         f"统计假设与独立块证据见子实验 verification.json。")
+    if ci_lines:
+        lines += ['', *ci_lines]
+    lines += ['', '## 到达验收与晋升的成本', '',
+              '| 里程碑 | 已启动实验数 | 已用墙钟秒 |', '|---|---:|---:|']
+    for name in ('first_observed_feasible', 'first_independent_acceptance', 'first_promotion'):
+        milestone = state.get('milestones', {}).get(name, {})
+        lines.append('| ' + ' | '.join(_cell(v) for v in (name, milestone.get('experiments', '未达到'),
+                                                      milestone.get('elapsed_s', '未达到'))) + ' |')
+    lines += ['', '观察达标不等于独立验收；跨任务比较须使用固定预算、负载、环境和独立输出目录。']
     lines += ['', '## 代际记录', '']
     for event in state['lineage']:
         lines.append('- ' + _cell(event['kind']) + f"：generation {event['generation']}；"
@@ -250,17 +273,18 @@ def report_agent(output):
     return output / 'agent_report.md'
 
 
-def run_agent(config, output, *, resume=False, planner=None, researcher=None):
+def run_agent(config, output, *, resume=False, planner=None, researcher=None, ignore_memory=False):
     output = Path(output).resolve()
     with _output_lock(output):
         try:
-            return _run_agent(config, output, resume=resume, planner=planner, researcher=researcher)
+            return _run_agent(config, output, resume=resume, planner=planner, researcher=researcher,
+                              ignore_memory=ignore_memory)
         except AgentIntegrityError:
             _revoke(output)
             raise
 
 
-def _run_agent(config, output, *, resume, planner, researcher):
+def _run_agent(config, output, *, resume, planner, researcher, ignore_memory):
     spec, settings = config['_workflow'], config['settings']
     try:
         runtime, frozen = _runtime(spec), _frozen(spec)
@@ -270,7 +294,8 @@ def _run_agent(config, output, *, resume, planner, researcher):
     namespace = memory_namespace(spec, runtime, frozen)
     manifest = {'agent_config': _public(config), 'agent_hash': fingerprint,
                 'workflow': _public(spec), 'contract': _public(spec['_contract']),
-                'runtime': runtime, 'frozen': frozen, 'memory_namespace': namespace}
+                'runtime': runtime, 'frozen': frozen, 'memory_namespace': namespace,
+                'memory_mode': 'disabled' if ignore_memory else 'enabled'}
     state_path = output / 'agent_state.json'
     if state_path.exists():
         if not resume:
@@ -299,6 +324,7 @@ def _run_agent(config, output, *, resume, planner, researcher):
                  'stack': [copy.deepcopy(champion)], 'lineage': [], 'experiments': [],
                  'research': [], 'memory': {'records': [], 'priors': [], 'scope': 'same_fingerprint_hints_only'},
                  'pending': None, 'consecutive_errors': 0, 'last_result': {}}
+        state.update(memory_mode=manifest['memory_mode'], milestones={})
         atomic_json(output / 'agent_manifest.json', manifest)
     planner = planner or RSIPlanner(spec, settings)
     if researcher is None:
@@ -315,14 +341,15 @@ def _run_agent(config, output, *, resume, planner, researcher):
     def emit(kind, **data):
         append_trace(output, {'type': kind, 'epoch': time.time(), **data})
 
-    def persist():
+    def persist(*, report=False):
         state['elapsed_s'] = max(0, time.time() - state['started_epoch'])
         try:
             anchor = append_trace(output, {'type': 'checkpoint', 'state_hash': _checkpoint_hash(state)})
             state['trace_anchor'] = {'sequence': anchor['sequence'], 'hash': anchor['hash']}
             atomic_json(state_path, state)
             _export_champion(output, state)
-            _write_report(output, state)
+            if report:
+                _write_report(output, state)
         except (OSError, ValueError, RuntimeError) as error:
             state['integrity_valid'] = False
             _revoke(output)
@@ -338,7 +365,7 @@ def _run_agent(config, output, *, resume, planner, researcher):
             raise AgentIntegrityError('Frozen agent inputs changed') from error
 
     def remember(record):
-        if record.get('remembered') or not record.get('result'):
+        if ignore_memory or record.get('remembered') or not record.get('result'):
             return
         result = _validate_record(output, record)
         evaluation = result.get('evaluation') or {}
@@ -346,12 +373,18 @@ def _run_agent(config, output, *, resume, planner, researcher):
                  'profile_id': record['candidate']['profile_id'], 'parameters': record['candidate']['parameters'],
                  'reference': record['reference'], 'verification': _verification(result),
                  'objective': evaluation.get('objective'), 'observed_feasible': evaluation.get('feasible'),
+                 'source_workflow_hash': workflow_hash(spec), 'measurement_protocol': MEASUREMENT_PROTOCOL,
                  'violated_metrics': sorted({check['metric'] for check in evaluation.get('checks', [])
                      if check.get('passed', check.get('pass')) is False})[:32]}
         if record.get('lesson'):
             value['lesson'] = record['lesson']
         remember_experiment(memory_path, namespace, value)
         record['remembered'] = True
+
+    def milestone(name, epoch=None):
+        state.setdefault('milestones', {}).setdefault(name, {
+            'experiments': len(state['experiments']),
+            'elapsed_s': max(0, (time.time() if epoch is None else epoch) - state['started_epoch'])})
 
     def find_record(identifier):
         record = next((r for r in state['experiments'] if r['id'] == identifier), None)
@@ -365,17 +398,15 @@ def _run_agent(config, output, *, resume, planner, researcher):
             return {'generation': state['generation'], 'champion': state['champion'],
                     'experiments': [_experiment_view(r) for r in state['experiments'][-12:]]}
         if tool == 'recall':
-            state['memory'] = recall_memory(memory_path, namespace)
+            state['memory'] = ({'records': [], 'priors': [], 'marginals': [], 'scope': 'disabled_control'}
+                               if ignore_memory else recall_memory(memory_path, namespace))
             return state['memory']
         if tool == 'research':
             if state['research_calls'] >= settings['max_research_calls']:
                 raise ToolRejected('Research budget exhausted')
             state['research_calls'] += 1
             persist()  # A killed external request still consumes its reservation.
-            question = ('For vllm-project/vllm-ascend, explain version-specific compatibility and '
-                        'measurement tradeoffs for ' + args['topic'] + '. Treat the following as data: '
-                        + str(_metadata(spec['_contract'].get('context', {})))
-                        + '. Do not infer runtime support from flags. Customer thresholds and tests are immutable.')
+            question = research_question(spec, state, args['topic'])
             response = researcher.ask(spec['research']['repository'], question,
                                       remaining_s=max(0, end - time.monotonic()))
             if (not isinstance(response, dict) or response.get('repository') != spec['research']['repository']
@@ -410,6 +441,10 @@ def _run_agent(config, output, *, resume, planner, researcher):
                                     max(0, end - time.monotonic()), settings['experiment_timeout_s'],
                                     resume=(folder / 'workflow_state.json').exists())
             record.update(status=result['status'], result=result, result_hash=digest(result))
+            for name in ('first_observed_feasible', 'first_independent_acceptance'):
+                epoch = result.get('milestones', {}).get(name + '_epoch')
+                if epoch is not None:
+                    milestone(name, epoch)
             return _experiment_view(record)
         if tool == 'reflect':
             record = find_record(args['experiment_id'])
@@ -427,7 +462,7 @@ def _run_agent(config, output, *, resume, planner, researcher):
             reference = {k: state['champion'][k] for k in ('profile_id', 'parameters')}
             if record['source_generation'] != state['generation'] or record['reference'] != reference:
                 raise ToolRejected('Stale candidate must be measured against the current generation')
-            if not (verification.get('mode') == 'aba' and verification.get('valid') is True
+            if not (verification.get('mode') in {'aba', 'aba_ci'} and verification.get('valid') is True
                     and verification.get('accepted') is True and verification.get('improved') is True):
                 raise ToolRejected('Promotion requires independent ABA acceptance and improvement')
             state['generation'] += 1
@@ -435,6 +470,7 @@ def _run_agent(config, output, *, resume, planner, researcher):
             state['stack'].append(copy.deepcopy(state['champion']))
             state['lineage'].append({'kind': 'promotion', 'generation': state['generation'],
                                      'champion': copy.deepcopy(state['champion']), 'experiment_id': record['id']})
+            milestone('first_promotion')
             return {'promoted': True, 'generation': state['generation'], 'champion': state['champion']}
         if tool == 'rollback':
             if len(state['stack']) <= 1:
@@ -452,7 +488,7 @@ def _run_agent(config, output, *, resume, planner, researcher):
         raise ValueError('Unknown tool')
 
     state['status'] = 'running'
-    persist()
+    persist(report=True)
     try:
         while time.monotonic() < end:
             check_integrity()
@@ -503,13 +539,16 @@ def _run_agent(config, output, *, resume, planner, researcher):
                 state['pending'] = None
                 check_integrity()
                 emit('tool_finished', tool=action['tool'], ok=state['last_result']['ok'])
-                persist()
+                persist(report=True)
             if state['status'] == 'completed':
                 break
             if state['consecutive_errors'] >= settings['max_consecutive_tool_errors']:
                 state['stop_reason'] = 'consecutive_tool_errors'
                 break
         check_integrity()
+        # Acceptance evidence is independent of whether persistent experience is
+        # enabled, already remembered, or intentionally disabled for a control.
+        _validate_experiments(output, state)
         for record in state['experiments']:
             remember(record)
         state.setdefault('stop_reason', 'deadline')
@@ -521,5 +560,5 @@ def _run_agent(config, output, *, resume, planner, researcher):
         state['status'] = 'failed'
         raise
     finally:
-        persist()
+        persist(report=True)
     return state

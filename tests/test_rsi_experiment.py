@@ -25,7 +25,7 @@ class RSIExperimentTests(TestCase):
 
     def execute(self, *, candidate=None, reference=None, runner=None, resume=False, remaining=60):
         with patch('ascend_poc.workflow.run_trial', side_effect=runner or self.fixture.runner) as hardware, \
-             patch('ascend_poc.workflow.runtime_signature', return_value={'fixture': 1}), \
+             patch('ascend_poc.workflow.runtime_signatures', side_effect=lambda configs: {key: {'fixture': 1} for key in configs}), \
              patch('ascend_poc.workflow.WorkflowPlanner', side_effect=AssertionError('no child LLM')), \
              patch('ascend_poc.deepwiki.DeepWikiClient', side_effect=AssertionError('no child network')), \
              redirect_stdout(io.StringIO()):
@@ -123,7 +123,7 @@ class RSIExperimentTests(TestCase):
         self.assertFalse(result['evaluation']['feasible'])
         self.assertFalse(result['verification']['accepted'])
         self.assertIsNone(result['confirmed_objective'])
-        self.assertEqual([t['profile_id'] for t in self.state()['trials'] if t['phase'] == 'confirmation'], ['reference'])
+        self.assertEqual([t['profile_id'] for t in self.state()['trials'] if t['phase'] == 'confirmation'], [])
 
     def test_slower_feasible_candidate_has_no_false_confirmation(self):
         result, _ = self.execute(candidate=self.reference, reference=self.candidate)
@@ -233,7 +233,7 @@ class RSIExperimentTests(TestCase):
         result, _ = self.execute()
         self.fixture.workflow_path.unlink()
         self.fixture.contract_path.unlink()
-        with patch('ascend_poc.workflow.runtime_signature', side_effect=AssertionError('not current hardware')), \
+        with patch('ascend_poc.workflow.runtime_signatures', side_effect=AssertionError('not current hardware')), \
              patch('ascend_poc.workflow.run_trial', side_effect=AssertionError('not a replay')):
             self.assertEqual(read_experiment(self.output), result)
 

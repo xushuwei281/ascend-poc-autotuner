@@ -19,7 +19,7 @@ from .metrics import evaluate_trial
 from .reporting import _read_object, _saved_workflow
 from .storage import atomic_json
 from .strategy import eligible_profiles, load_workflow, materialize_profile, workflow_hash
-from .verification import evaluate_aba
+from .confirmation import revalidate_confirmation
 from .workflow import _checkpoint_hash, run_workflow
 from .workflow_planner import _analysis_summary
 
@@ -56,8 +56,10 @@ def _protocol(spec, candidate, reference, budget):
         config = materialize_profile(spec, selection['profile_id'], selection['parameters'])
         config['budget'] = copy.deepcopy(budget)
         configs[label] = config
-    verification = dict(copy.deepcopy(spec['verification']), mode='aba')
-    protocol = {'schema_version': 1, 'source_workflow_hash': workflow_hash(spec),
+    verification = dict(copy.deepcopy(spec['verification']),
+                        mode='aba_ci' if spec['verification']['mode'] == 'aba_ci' else 'aba',
+                        confirmation_profiles=['candidate'])
+    protocol = {'schema_version': 2, 'source_workflow_hash': workflow_hash(spec),
                 'candidate': candidate, 'reference': reference,
                 'candidate_config_hash': config_hash(configs['candidate']),
                 'reference_config_hash': config_hash(configs['reference']),
@@ -121,9 +123,9 @@ class _LocalFacts:
 def run_experiment(spec, candidate, reference, output, remaining_s, experiment_timeout_s, *, resume=False):
     """Run one fixed candidate against the incumbent, never change the evaluator.
 
-    A child tests the reference and candidate, then independently verifies the
-    best feasible exploration result. If that is the reference, the candidate
-    has no accepted confirmation and cannot be promoted. Resume retains the
+    A child tests the reference and candidate, then independently verifies only
+    the candidate when it wins exploration. A losing candidate does not cause
+    a redundant reference self-confirmation. Resume retains the
     original child deadline and refuses a shortened global budget it cannot fit.
     """
     candidate, reference = _selection(spec, candidate), _selection(spec, reference)
@@ -171,7 +173,7 @@ def read_experiment(output):
     fields = {'schema_version', 'source_workflow_hash', 'candidate', 'reference',
               'candidate_config_hash', 'reference_config_hash', 'budget', 'verification',
               'workdir', 'input_hash'}
-    if set(protocol) != fields or protocol['schema_version'] != 1:
+    if set(protocol) != fields or type(protocol['schema_version']) is not int or protocol['schema_version'] not in (1, 2):
         raise ValueError('Malformed experiment protocol')
     if protocol['input_hash'] != _hash({key: value for key, value in protocol.items() if key != 'input_hash'}):
         raise ValueError('Experiment protocol hash does not match')
@@ -179,11 +181,15 @@ def read_experiment(output):
     child = _saved_workflow(output, state)
     if child['name'] != 'RSI independent experiment ' + protocol['input_hash']:
         raise ValueError('Experiment protocol is not bound to the saved workflow')
-    if (child['verification'] != protocol['verification'] or child['verification']['mode'] != 'aba'
+    if (child['verification'] != protocol['verification'] or child['verification']['mode'] not in {'aba', 'aba_ci'}
             or child['budget'] != protocol['budget']
             or child['budget']['max_trials'] != 2 or child['budget']['finalists'] != 1
             or [profile['id'] for profile in child['profiles']] != ['reference', 'candidate']):
         raise ValueError('Saved experiment verification policy changed')
+    if protocol['schema_version'] == 2 and child['verification'].get('confirmation_profiles') != ['candidate']:
+        raise ValueError('RSI confirmation must be restricted to the proposed candidate')
+    if protocol['schema_version'] == 1 and child['verification']['mode'] != 'aba':
+        raise ValueError('Legacy RSI protocol only supports original ABA')
     if (_read_object(output / 'experiment-workflow.json') != _read_object(output / 'workflow.json')
             or _read_object(output / 'experiment-contract.json') != _read_object(output / 'contract.json')):
         raise ValueError('Experiment source snapshot changed')
@@ -198,8 +204,10 @@ def read_experiment(output):
         if label not in ('candidate', 'reference') or trial['parameters'] != protocol[label]['parameters']:
             raise ValueError('Experiment measured an unplanned configuration')
         if label == 'candidate':
-            if trial['phase'] not in ('exploration', 'confirmation'):
+            if trial['phase'] not in ('exploration', 'confirmation', 'confirmation_block'):
                 raise ValueError('Candidate cannot be an ABA reference trial')
+            if trial['phase'] == 'confirmation_block' and child['verification']['mode'] != 'aba_ci':
+                raise ValueError('Additional candidate blocks require the CI protocol')
             candidates.append(trial)
         elif trial['phase'] not in ('exploration', 'confirmation', 'reference_before', 'reference_after'):
             raise ValueError('Invalid reference trial phase')
@@ -207,27 +215,18 @@ def read_experiment(output):
                          and trial.get('verification', {}).get('verdict') != 'PENDING'), None)
     latest = confirmation or (candidates[-1] if candidates else None)
     evaluation = None
-    if latest and latest['status'] == 'completed':
-        repeats = child['budget']['final_repetitions'] if latest['phase'] == 'confirmation' else child['budget']['repetitions']
+    if latest and latest['status'] in {'completed', 'infeasible_early'}:
+        repeats = child['budget']['final_repetitions'] if latest['phase'] in {'confirmation', 'confirmation_block'} else child['budget']['repetitions']
         evaluation = evaluate_trial(child['_contract'], latest.get('scenario_results', []), expected_repetitions=repeats)
         if evaluation != latest.get('evaluation'):
             raise ValueError('Stored experiment evaluation does not match its measurements')
-    verification = {'mode': 'aba', 'verdict': 'INVALID', 'valid': False,
+    verification = {'mode': child['verification']['mode'], 'verdict': 'INVALID', 'valid': False,
                     'accepted': False, 'improved': False,
                     'reasons': ['Candidate has no completed independent ABA confirmation']}
     if confirmation:
         recorded = confirmation['verification']
-        references = recorded.get('reference_trials')
-        if not isinstance(references, list) or len(references) != 2:
-            raise ValueError('Candidate confirmation has invalid reference identities')
-        before, after = [next((trial for trial in state['trials'] if trial['id'] == identifier), None)
-                         for identifier in references]
-        for trial, phase in ((before, 'reference_before'), (after, 'reference_after')):
-            if trial and (trial['profile_id'] != 'reference' or trial['phase'] != phase):
-                raise ValueError('Candidate confirmation used an invalid reference')
-        verification = evaluate_aba(dict(child['_contract'], budget=child['budget']),
-                                    before, confirmation, after, child['verification'])
-        verification['reference_trials'] = references
+        verification = revalidate_confirmation(dict(child['_contract'], budget=child['budget']),
+            state['trials'], confirmation, child['verification'], 'reference')
         if verification != recorded:
             raise ValueError('Stored experiment verdict does not match independent ABA validation')
     if state['status'] != 'completed':
@@ -237,9 +236,28 @@ def read_experiment(output):
     # text are never copied to the parent model's decision context.
     analysis = (_analysis_summary(analyze_trial(candidates[-1], child['_contract']), child['_contract'])
                 if candidates else {})
-    return {'candidate': copy.deepcopy(protocol['candidate']), 'reference': copy.deepcopy(protocol['reference']),
+    summary = {'candidate': copy.deepcopy(protocol['candidate']), 'reference': copy.deepcopy(protocol['reference']),
             'input_hash': protocol['input_hash'], 'source_workflow_hash': protocol['source_workflow_hash'],
             'workflow_hash': state['workflow_hash'], 'state_hash': _checkpoint_hash(state),
             'status': state['status'], 'candidate_status': latest['status'] if latest else 'not_measured',
             'evaluation': evaluation, 'verification': verification, 'analysis': analysis,
             'confirmed_objective': evaluation['objective'] if confirmation and verification['accepted'] and evaluation else None}
+    if protocol['schema_version'] >= 2:
+        observed_epochs = []
+        for trial in candidates:
+            if trial['phase'] != 'exploration' or trial['status'] != 'completed':
+                continue
+            observed = evaluate_trial(child['_contract'], trial.get('scenario_results', []),
+                                      expected_repetitions=child['budget']['repetitions'])
+            if observed != trial.get('evaluation'):
+                raise ValueError('Exploration evidence differs from its stored evaluation')
+            epoch = trial.get('ended_epoch')
+            if observed['feasible'] and type(epoch) in (int, float) and math.isfinite(epoch):
+                observed_epochs.append(epoch)
+        verified_epoch = confirmation.get('verified_epoch') if confirmation and verification['accepted'] else None
+        if type(verified_epoch) not in (int, float) or not math.isfinite(verified_epoch):
+            verified_epoch = None
+        summary['milestones'] = {
+            'first_observed_feasible_epoch': min(observed_epochs) if observed_epochs else None,
+            'first_independent_acceptance_epoch': verified_epoch}
+    return summary

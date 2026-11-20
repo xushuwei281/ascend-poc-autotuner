@@ -104,6 +104,22 @@ EvolvingInfra 将计算角色与 KV 存储分开，利用定制引擎、router �
 
 博客关于测试覆盖不足的案例提醒：正确性检查通过并不单独证明真实负载受益。客户 trace、输出政策、缓存条件和保留测试集仍需有代表性；工具不会自动构造客户隐藏测试集。
 
+## 统计与测量优化依据
+
+v0.6.0 根据代码评估增加成本观测、预算预检、可选探索早停、版本化经验作用域及独立多组 `aba_ci`。这些是本项目的实现选择，不是两个上游项目已在昇腾上验证的结论。
+
+| 主源 | 用于检查的假设与限制 |
+|---|---|
+| [NIST：单总体均值的 t 检验](https://www.itl.nist.gov/div898/handbook/prc/section2/prc22.htm) | 小样本的 t 分位数和自由度；不能固定使用 `1.96` 冒充任意样本量的区间 |
+| [NIST：双样本 t 检验](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm) | 配对与非配对、方差及目标差异的区分；本实现采用 block 配对效果，未把它命名为 Welch 检验 |
+| [NIST：Bonferroni 方法](https://www.itl.nist.gov/div898/handbook/prc/section4/prc473.htm) | 对预定有限比较分配错误率；单次区间不能覆盖任意多次任务重跑 |
+| [NIST：自相关测量的不确定度](https://www.nist.gov/programs-projects/uncertainty-analysis-autocorrelated-measurement-data) | 相关重复不能直接套用假设独立的普通不确定度公式 |
+| [NIST：顺序趋势与独立性](https://www.itl.nist.gov/div898/handbook/pmd/section4/pmd444.htm) | 时间漂移或趋势需要先识别，不能只将观测混合后扩大区间 |
+
+本实现按每场景、每独立 ABA block 的方向归一化 log-ratio 计算单侧 Student t 下界，并按场景数与预定比较上限分配错误率。原始客户目标、逐重复硬门槛及原 ABA 裁决继续保存；块内和跨块参照漂移仍能使比较无效。区间依赖独立 block 与近似正态的 block 效果，代码不自动证明这些假设。
+
+成本预检采用观测与操作者粗估值，不声称预测真实 NPU 时长；探索早停仅删除已不可能达标的剩余探索测量。共享 ABA 参照、分阶段重新加载模型、跨检查摘要缓存和弱化文件校验未作为此版本的默认优化。测试使用数值案例、协议夹具和合成流程，不能推出现场误晋升率或节省时间百分比。
+
 ## 归属与复现声明
 
 本项目中的 Agent、经验、回放、影子建议和验收逻辑是针对本项目接口独立实现的，没有直接复制上述项目的 engine、router、Trie 重放器或训练 judge。此文档记录方法来源，不表示二者为本项目背书。

@@ -253,9 +253,18 @@ def validate_config(config: dict) -> dict:
 
     budget = _object(config.setdefault("budget", {}), "budget")
     defaults = {"max_trials": 12, "max_wall_time_s": 7200, "repetitions": 3, "final_repetitions": 3, "finalists": 2}
-    _keys(budget, set(defaults), "budget")
+    _keys(budget, set(defaults) | {"early_stop", "confirmation_reserve", "cost_safety_factor", "estimated_trial_s"}, "budget")
     for key, value in defaults.items():
         _number(budget.setdefault(key, value), f"budget.{key}", minimum=0.01 if key == "max_wall_time_s" else 1, integer=key != "max_wall_time_s")
+    # Optional execution policies stay absent in legacy snapshots so historical
+    # fingerprints remain reproducible. Callers use get() for their defaults.
+    for key in ("early_stop", "confirmation_reserve"):
+        if key in budget and type(budget[key]) is not bool:
+            _error("budget." + key, "must be a boolean")
+    if "cost_safety_factor" in budget:
+        _number(budget["cost_safety_factor"], "budget.cost_safety_factor", minimum=1)
+    if "estimated_trial_s" in budget:
+        _number(budget["estimated_trial_s"], "budget.estimated_trial_s", minimum=.01)
 
     llm = _object(config.get("llm"), "llm")
     _keys(llm, {"base_url", "model", "api_key_env", "timeout_s", "max_tokens", "temperature", "json_mode", "max_retries"}, "llm")

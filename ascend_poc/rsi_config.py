@@ -56,6 +56,10 @@ def load_agent(path):
         if settings[key] > 10000:
             raise ValueError('agent.settings.' + key + ' exceeds 10000')
     value['_workflow'] = load_workflow(source.parent / value['workflow'])
+    verification = value['_workflow']['verification']
+    if (verification['mode'] == 'aba_ci'
+            and settings['max_experiments'] > verification['ci_max_comparisons']):
+        raise ValueError('max_experiments exceeds the predeclared CI comparison budget')
     value['_memory_file'] = str((source.parent / value['memory_file']).resolve())
     return value
 

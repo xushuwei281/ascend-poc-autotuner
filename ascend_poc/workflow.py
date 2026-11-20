@@ -10,17 +10,18 @@ import time
 
 from .config import validate_candidate
 from .audit import append_trace, read_trace, verify_frozen_files
+from .budget import confirmation_cost, preflight, search_cutoff, trial_cost
 from .diagnosis import analyze_trial
 from .llm import LLMError, _metadata
 from .metrics import evaluate_trial
-from .provenance import runtime_signature
+from .provenance import runtime_signature, runtime_signatures
 from .report import rank_key, _cell
 from .runner import RunnerError, run_trial
 from .storage import atomic_json, experiment_lock
 from .strategy import eligible_profiles, materialize_profile, workflow_hash
 from .tuner import parameter_hash, unseen_candidate
 from .workflow_planner import WorkflowPlanner, _analysis_summary, _public_sources
-from .verification import evaluate_aba
+from .verification import evaluate_aba, evaluate_aba_ci
 
 
 class WorkflowIntegrityError(RuntimeError):
@@ -142,8 +143,23 @@ def write_workflow_report(spec, state, output):
         if verification:
             lines.append(f"- {trial['id']}：{verification['verdict']}；客户验收 {verification.get('accepted', False)}；"
                          f"超过噪声门槛的提升 {verification.get('improved', False)}。")
+            if verification.get('mode') == 'aba_ci':
+                ci = verification.get('ci', {})
+                lines.append('  独立启动区组置信比较：点估计 ' + _cell(verification.get('relative_improvement'))
+                             + '；提升比例下界 ' + _cell(verification.get('relative_improvement_lower_bound'))
+                             + '；置信水平 ' + _cell(ci.get('confidence'))
+                             + '；区组数 ' + _cell(ci.get('blocks'))
+                             + '。区间依赖独立区组及统计模型假设，不能由同进程重复次数替代。')
             for reason in verification.get('reasons', []):
                 lines.append('  ' + _cell(reason))
+    if state.get('verification_attempts'):
+        lines += ['', '## 确认预算与跳过记录', '']
+        for attempt in state['verification_attempts']:
+            estimate = attempt.get('estimate', {})
+            lines.append('- ' + _cell(attempt.get('candidate_id')) + '：' + _cell(attempt.get('status'))
+                         + '；估计完整确认耗时 ' + _cell(estimate.get('estimated_s'))
+                         + ' 秒；可用时间 ' + _cell(estimate.get('remaining_s')) + ' 秒。')
+        lines.append('耗时估计不是完成保证。跳过或不完整的测量不等于独立拒绝，也不能作为客户验收通过证据。')
     lines += ['', '达标与提升分别裁决。ABA 中任一参考运行缺失或基线漂移超限，该组为 INVALID，不能导出为最佳配置。',
               '输入完整性仅覆盖运行指纹和显式 frozen_files；未声明的模型/数据目录及硬件身份不代表已核验。']
     lines += ['', '## 验收缺口', '']
@@ -211,8 +227,8 @@ def run_workflow(spec: dict, output: Path, *, resume=False, planner=None, resear
 
 def _run(spec, output, resume, planner, researcher):
     fingerprint = workflow_hash(spec)
-    runtime = {p['id']: runtime_signature(materialize_profile(spec, p['id']))
-               for p in eligible_profiles(spec)}
+    runtime = runtime_signatures({p['id']: materialize_profile(spec, p['id'])
+                                  for p in eligible_profiles(spec)})
     frozen = verify_frozen_files(spec['verification']['frozen_files'],
                                  Path(spec['_contract'].get('_repo_dir', Path.cwd())))
     trace = read_trace(output / 'events.jsonl')
@@ -266,7 +282,8 @@ def _run(spec, output, resume, planner, researcher):
             from .deepwiki import DeepWikiClient
             researcher = DeepWikiClient(settings['endpoint'], timeout_s=settings['timeout_s'])
     end = time.monotonic() + max(0, state['deadline_epoch'] - time.time())
-    search_end = min(end, time.monotonic() + max(0, state['started_epoch'] + spec['budget']['max_wall_time_s'] * .75 - time.time()))
+    legacy_search_end = min(end, time.monotonic() + max(0, state['started_epoch'] + spec['budget']['max_wall_time_s'] * .75 - time.time()))
+    search_end = legacy_search_end
     trace_usable = True
 
     def persist():
@@ -297,8 +314,8 @@ def _run(spec, output, resume, planner, researcher):
 
     def check_integrity():
         try:
-            current = {p['id']: runtime_signature(materialize_profile(spec, p['id']))
-                       for p in eligible_profiles(spec)}
+            current = runtime_signatures({p['id']: materialize_profile(spec, p['id'])
+                                          for p in eligible_profiles(spec)})
             files = verify_frozen_files(spec['verification']['frozen_files'],
                                         Path(spec['_contract'].get('_repo_dir', Path.cwd())))
             if current != runtime or files != frozen or workflow_hash(spec) != fingerprint:
@@ -329,10 +346,15 @@ def _run(spec, output, resume, planner, researcher):
              decision_id=decision_id)
         persist()
         try:
-            data = run_trial(config, parameters, folder, limit, repeats)
+            options = {'phase': phase} if phase == 'exploration' and config['budget'].get('early_stop', False) else {}
+            data = run_trial(config, parameters, folder, limit, repeats, **options)
             record['scenario_results'] = data
             record['evaluation'] = evaluate_trial(config, data, expected_repetitions=repeats)
-            record['status'] = 'completed'
+            record['status'] = getattr(data, 'status', 'completed')
+            if getattr(data, 'timings', None):
+                record['timings'] = data.timings
+            if getattr(data, 'aborted_after', None):
+                record['aborted_after'] = data.aborted_after
         except (RunnerError, ValueError, OSError) as error:
             record['status'] = 'failed'
             record['error_type'] = type(error).__name__
@@ -359,8 +381,23 @@ def _run(spec, output, resume, planner, researcher):
     persist()
     try:
         emit('workflow_resumed' if resume else 'workflow_started', workflow_hash=fingerprint)
-        while len([t for t in state['trials'] if t['phase'] == 'exploration']) < spec['budget']['max_trials'] and time.monotonic() < search_end:
+        while len([t for t in state['trials'] if t['phase'] == 'exploration']) < spec['budget']['max_trials'] and time.monotonic() < end:
             explored = [t for t in state['trials'] if t['phase'] == 'exploration']
+            allowed = spec['verification'].get('confirmation_profiles')
+            ranked = sorted((t for t in explored if t['status'] == 'completed'
+                             and t.get('evaluation', {}).get('feasible', False)),
+                            key=lambda t: rank_key(t, spec['_contract']['objective']['direction']), reverse=True)
+            forecast = [t['profile_id'] for t in ranked[:spec['budget']['finalists']]
+                        if allowed is None or t['profile_id'] in allowed]
+            while len(forecast) < spec['budget']['finalists']:
+                forecast.append(allowed[0] if allowed and len(allowed) == 1 else None)
+            search_end, estimate = search_cutoff(end, legacy_search_end, state['trials'], spec['budget'],
+                spec['verification'], eligible_profiles(spec)[0]['id'], forecast)
+            if time.monotonic() >= search_end:
+                state['stop_reason'] = 'confirmation_budget_reserved' if estimate else 'search_deadline'
+                if estimate:
+                    emit('confirmation_budget_reserved', estimate=estimate)
+                break
             if not explored:
                 first = eligible_profiles(spec)[0]['id']
                 measure(first, materialize_profile(spec, first)['baseline'], 'Frozen strategy baseline',
@@ -441,6 +478,12 @@ def _run(spec, output, resume, planner, researcher):
                             'evidence_ids': []}
             if time.monotonic() >= search_end:
                 break
+            if spec['budget'].get('confirmation_reserve', False):
+                cost = trial_cost(state['trials'], proposal['profile_id'], spec['budget']['repetitions'], spec['budget'])
+                if cost['seconds'] is not None and cost['seconds'] * spec['budget'].get('cost_safety_factor', 1.25) > search_end - time.monotonic():
+                    state['stop_reason'] = 'confirmation_budget_reserved'
+                    emit('exploration_skipped_insufficient_budget', profile_id=proposal['profile_id'], estimate=cost)
+                    break
             decision = dict(proposal, id=f"decision-{len(state['decisions']):04d}", source=source, after_trial=explored[-1]['id'])
             state['decisions'].append(decision)
             emit('proposal_selected', decision=decision)
@@ -457,7 +500,75 @@ def _run(spec, output, resume, planner, researcher):
                 break
             if _identity(candidate['profile_id'], candidate['parameters']) in seen:
                 continue
+            allowed = spec['verification'].get('confirmation_profiles')
+            if allowed is not None and candidate['profile_id'] not in allowed:
+                skipped = {'candidate_id': candidate['id'], 'profile_id': candidate['profile_id'],
+                           'status': 'skipped_confirmation_profile', 'mode': spec['verification']['mode']}
+                state.setdefault('verification_attempts', []).append(skipped)
+                emit('verification_skipped', **skipped)
+                persist()
+                continue
+            baseline_id = eligible_profiles(spec)[0]['id']
+            estimate = confirmation_cost(state['trials'], spec['budget'], spec['verification'],
+                                         baseline_id, [candidate['profile_id']])
+            estimate = preflight(end - time.monotonic(), estimate)
+            if spec['budget'].get('confirmation_reserve', False):
+                emit('verification_budget_preflight', candidate_id=candidate['id'], estimate=estimate)
+                if not estimate['can_start']:
+                    skipped = {'candidate_id': candidate['id'], 'profile_id': candidate['profile_id'],
+                               'status': 'skipped_insufficient_budget', 'mode': spec['verification']['mode'],
+                               'estimate': estimate}
+                    state.setdefault('verification_attempts', []).append(skipped)
+                    emit('verification_skipped', **skipped)
+                    persist()
+                    continue
             repeats = spec['budget']['final_repetitions']
+            if spec['verification']['mode'] == 'aba_ci':
+                attempt = {'candidate_id': candidate['id'], 'profile_id': candidate['profile_id'],
+                           'mode': 'aba_ci', 'status': 'running', 'reference_blocks': [], 'estimate': estimate}
+                state.setdefault('verification_attempts', []).append(attempt)
+                baseline_params = materialize_profile(spec, baseline_id)['baseline']
+                blocks = []
+                confirmed = None
+                for block_index in range(spec['verification'].get('ci_blocks', 5)):
+                    refs = {'before': None, 'candidate': None, 'after': None}
+                    attempt['reference_blocks'].append(refs)
+                    if time.monotonic() >= end:
+                        break
+                    before = measure(baseline_id, baseline_params, f'CI block {block_index + 1} reference before ' + candidate['id'],
+                                     'reference_before', repeats, end)
+                    refs['before'] = before['id']
+                    if time.monotonic() >= end:
+                        break
+                    phase = 'confirmation' if block_index == spec['verification'].get('ci_blocks', 5) - 1 else 'confirmation_block'
+                    block_candidate = measure(candidate['profile_id'], candidate['parameters'],
+                        f'CI block {block_index + 1} independent candidate ' + candidate['id'], phase, repeats, end,
+                        candidate.get('decision_id'))
+                    refs['candidate'] = block_candidate['id']
+                    if phase == 'confirmation':
+                        confirmed = block_candidate
+                    after = None
+                    if time.monotonic() < end:
+                        after = measure(baseline_id, baseline_params, f'CI block {block_index + 1} reference after ' + candidate['id'],
+                                        'reference_after', repeats, end)
+                        refs['after'] = after['id']
+                    blocks.append({'before': before, 'candidate': block_candidate, 'after': after})
+                    persist()
+                    if after is None:
+                        break
+                verification = evaluate_aba_ci(dict(spec['_contract'], budget=spec['budget']), blocks, spec['verification'])
+                verification['reference_blocks'] = attempt['reference_blocks']
+                attempt['status'] = 'completed' if confirmed is not None else 'incomplete'
+                attempt['verification'] = verification
+                if confirmed is not None:
+                    confirmed['verification'] = verification
+                    confirmed['verified_epoch'] = time.time()
+                    atomic_json(output / 'trials' / confirmed['id'] / 'verification.json', verification)
+                    emit('verification_finished', trial_id=confirmed['id'], verification=verification)
+                else:
+                    emit('verification_incomplete', candidate_id=candidate['id'], reason='incomplete_ci_blocks')
+                persist()
+                continue
             before = after = None
             if spec['verification']['mode'] == 'aba':
                 baseline_id = eligible_profiles(spec)[0]['id']

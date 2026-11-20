@@ -43,7 +43,7 @@ class ReportingTests(TestCase):
         expected_report = (self.output / 'workflow_report.md').read_bytes()
         self.discard_exports()
         with patch('ascend_poc.workflow.run_trial', side_effect=AssertionError('no measurements')), \
-             patch('ascend_poc.workflow.runtime_signature', side_effect=AssertionError('no runtime probe')), \
+             patch('ascend_poc.workflow.runtime_signatures', side_effect=AssertionError('no runtime probe')), \
              patch('ascend_poc.workflow.verify_frozen_files', side_effect=AssertionError('no live inputs')), \
              patch('ascend_poc.workflow.WorkflowPlanner', side_effect=AssertionError('no LLM')):
             result = regenerate_report(self.output)

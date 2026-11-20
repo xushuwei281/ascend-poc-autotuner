@@ -25,6 +25,22 @@ class RunnerError(RuntimeError):
     """A deployment or measurement failed; never contains command arguments."""
 
 
+class TrialResults(list):
+    """Backward-compatible scenario list with execution metadata for the owner.
+
+    The list contains only measurements actually collected. Callers persist the
+    attributes separately in their trial record; ordinary JSON serialization of
+    the list intentionally remains compatible with the historical API.
+    """
+
+    def __init__(self, repetitions: int):
+        super().__init__()
+        self.status = 'failed'
+        self.aborted_after = None
+        self.timings = {'startup_s': 0.0, 'benchmark_s': 0.0, 'quality_s': 0.0,
+                        'other_s': 0.0, 'total_s': 0.0, 'repetitions': repetitions}
+
+
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_.:]*)\}")
 _MAX_RESULT_BYTES = 32 * 1024 * 1024
 
@@ -240,8 +256,8 @@ def _safe_record(command: list[str], original: list[str], env: dict[str, str]) -
 
 def run_trial(
     config: dict[str, Any], candidate: dict[str, Any], trial_dir: Path,
-    deadline: float, repetitions: int,
-) -> list[dict[str, Any]]:
+    deadline: float, repetitions: int, *, phase: str | None = None,
+) -> TrialResults:
     """Measure every scenario under one server configuration.
 
     Each repetition has a fresh directory. Hooks run in this order:
@@ -253,11 +269,23 @@ def run_trial(
     Explicit benchmark_env creates a separate environment for all measurement
     hooks and results; omitted benchmark_env preserves legacy tune behavior.
     The server is always stopped before this function returns or raises.
+
+    Only explicit exploration with ``budget.early_stop`` enabled may return a
+    partial, ``infeasible_early`` list. Confirmation and reference measurements
+    always run their full matrix. Timings use monotonic elapsed seconds:
+    startup is one server launch/health wait; benchmark includes repeated setup,
+    warmup and benchmark commands; quality includes repeated quality commands;
+    other includes preparation, result processing and cleanup. ``repetitions``
+    is the requested count per scenario, not a count of independent restarts.
     """
-    from .metrics import normalize_metrics
+    from .metrics import evaluate_repetition, normalize_metrics
+    from .storage import atomic_json
 
     if not isinstance(repetitions, int) or isinstance(repetitions, bool) or repetitions < 1:
         raise RunnerError("Repetitions must be a positive integer")
+    started = time.monotonic()
+    results = TrialResults(repetitions)
+    early_stop = phase == 'exploration' and config.get('budget', {}).get('early_stop', False) is True
     trial_dir = Path(trial_dir).resolve()
     trial_dir.mkdir(parents=True, exist_ok=True)
     repo_dir = Path(config.get("_repo_dir", Path.cwd())).resolve()
@@ -288,8 +316,13 @@ def run_trial(
     def stage(command: list[str], run_dir: Path, label: str, timeout: float) -> None:
         rendered = render_command(command, candidate, run_dir, repo_dir, benchmark_env)
         record(label, rendered, command, benchmark_env)
-        run_command(rendered, cwd=repo_dir, env=benchmark_env, log_path=run_dir / f"{label}.log",
-                    timeout_s=timeout, deadline=deadline, label=label)
+        stage_started = time.monotonic()
+        try:
+            run_command(rendered, cwd=repo_dir, env=benchmark_env, log_path=run_dir / f"{label}.log",
+                        timeout_s=timeout, deadline=deadline, label=label)
+        finally:
+            bucket = 'quality_s' if label == 'quality' else 'benchmark_s'
+            results.timings[bucket] += max(0.0, time.monotonic() - stage_started)
 
     server = config["server"]
     _remaining(deadline)
@@ -297,16 +330,19 @@ def run_trial(
     argv = render_command(server["command"], candidate, trial_dir, repo_dir, env)
     record("server", argv, server["command"], env)
     process = None
-    results: list[dict[str, Any]] = []
     with (trial_dir / "server.log").open("wb") as log:
         try:
+            startup_started = time.monotonic()
             try:
-                process = subprocess.Popen(argv, cwd=repo_dir, env=env, stdout=log,
-                    stderr=subprocess.STDOUT, shell=False, start_new_session=True, close_fds=True)
-            except (OSError, ValueError) as exc:
-                raise RunnerError(f"Server could not be started ({type(exc).__name__})") from None
-            _wait_healthy(process, server["health_url"],
-                          min(deadline, time.monotonic() + server.get("startup_timeout_s", 600)))
+                try:
+                    process = subprocess.Popen(argv, cwd=repo_dir, env=env, stdout=log,
+                        stderr=subprocess.STDOUT, shell=False, start_new_session=True, close_fds=True)
+                except (OSError, ValueError) as exc:
+                    raise RunnerError(f"Server could not be started ({type(exc).__name__})") from None
+                _wait_healthy(process, server["health_url"],
+                              min(deadline, time.monotonic() + server.get("startup_timeout_s", 600)))
+            finally:
+                results.timings['startup_s'] = max(0.0, time.monotonic() - startup_started)
             (trial_dir / "server-process.json").write_text(
                 json.dumps({"pid": process.pid, "started_at_unix": time.time()}), encoding="utf-8")
             for scenario in config["scenarios"]:
@@ -377,13 +413,34 @@ def run_trial(
                     collected.append(metrics)
                     (run_dir / "normalized.json").write_text(
                         json.dumps(metrics, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+                    if early_stop:
+                        observed = evaluate_repetition(config, scenario, metrics, repeat + 1)
+                        if observed['failures']:
+                            results.status = 'infeasible_early'
+                            results.aborted_after = {'scenario': scenario['name'], 'repetition': repeat + 1,
+                                                     'violated_metrics': observed['violated_metrics']}
+                            break
                 result = {"name": scenario["name"], "metrics": collected}
                 if workloads:
                     result['workload_summaries'] = workloads
                 results.append(result)
+                if results.status == 'infeasible_early':
+                    break
+            if results.status != 'infeasible_early':
+                results.status = 'completed'
             return results
+        except KeyboardInterrupt:
+            results.status = 'interrupted'
+            raise
         finally:
             if process is not None:
                 grace = min(float(server.get("shutdown_timeout_s", 20)),
                             max(0.0, deadline - time.monotonic()))
                 stop_process_group(process, grace)
+            results.timings['total_s'] = max(0.0, time.monotonic() - started)
+            accounted = sum(results.timings[key] for key in ('startup_s', 'benchmark_s', 'quality_s'))
+            results.timings['other_s'] = max(0.0, results.timings['total_s'] - accounted)
+            atomic_json(trial_dir / 'trial-execution.json', {
+                'schema_version': 1, 'phase': phase, 'status': results.status,
+                'aborted_after': results.aborted_after, 'timings': results.timings,
+            })

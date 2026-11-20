@@ -14,7 +14,10 @@
     "max_wall_time_s": 14400,
     "repetitions": 3,
     "final_repetitions": 3,
-    "finalists": 2
+    "finalists": 2,
+    "early_stop": true,
+    "confirmation_reserve": true,
+    "cost_safety_factor": 1.25
   },
   "research": {
     "transport": "mcp",

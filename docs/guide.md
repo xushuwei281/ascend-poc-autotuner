@@ -289,10 +289,32 @@ LLM 返回 `choices[0].message.content` 中的 JSON 对象，工作流提案结�
 | `repetitions` | `3`，探索阶段每场景重复次数 |
 | `final_repetitions` | `3`，最终确认每场景重复次数 |
 | `finalists` | `2`，最多确认的候选数量 |
+| `confirmation_reserve` | `false`，启用观测成本驱动的确认储备及进场预算预检 |
+| `cost_safety_factor` | `1.25`，成本估计的安全系数，至少为 `1` |
+| `estimated_trial_s` | 可选正数；尚无可用观测时，一次完整探索 trial 的粗估秒数，含启动和全部探索重复 |
+| `early_stop` | `false`，仅探索阶段在已执行重复出现硬门槛失败后停止剩余测量 |
 
-工作流通常将总预算的前 75% 用于搜索，余下部分留给确认；提前结束搜索时可以更早确认。服务启动、研究/LLM 调用、预热和测试都消耗时间。停止进程的清理宽限可能使退出稍晚于截止时刻。
+未启用成本储备时，75% 是探索截止线；探索提前结束，确认立即使用全部剩余时间，并非固定只能使用最后 25%。服务启动、研究/LLM 调用、预热和测试都消耗时间。停止进程的清理宽限可能使退出稍晚于截止时刻。
+
+启用 `confirmation_reserve` 后，执行器用完成 trial 的成本观测估计剩余确认成本，区分固定启动与随重复次数增长的测试开销，并按 profile 取值。未知 profile 可参考保守回退估计或操作者的 `estimated_trial_s`；没有估计不等于耗时为零。开始完整 ABA/CI 确认组前，如果估计不能容纳，记录 `skipped_insufficient_budget`，不先执行一半再宣称成功。此预检是预算决策，不是硬件时限保证；实际慢启动、干扰或未知成本仍可能超时。
+
+旧配置未声明这些字段时仍关闭。新版 `examples/ascend-workflow.json` 与 `examples/ascend-agent-workflow.json` 显式启用 `early_stop` 和 `confirmation_reserve`；RSI 继承所引用工作流的设置，不暗中覆盖用户选择。
+
+在配置中填写 `budget.estimated_trial_s` 后，可以不启动模型先查看确认组的粗估成本：
+
+```bash
+python3 -m ascend_poc workflow-validate --config customer-workflow.json --estimate
+```
+
+未提供估值时，`estimated_s` 为 `null`，表示未知；`measurements` 仍给出确认测量次数。这不包含全部探索与外部 API 时间，也不代表完整任务一定能在预算内结束。
+
+RSI 子实验只探索参照和一个候选，通用工作流可探索多个候选。`single` 需要一次确认，`aba` 需要三次，`aba_ci` 需要 `3 × ci_blocks` 次。完整 trial 的时长不能直接按重复次数倍增，因为模型加载通常只发生一次。先在目标机器记录加载、预热、测试及质量检查成本，再设置预算。
 
 所有场景、每一次重复、所有硬门槛必须通过。均值或高吞吐不能抵消某一轮质量、延迟或错误率失败。探索通过只代表有资格进入最终确认；`best.json` 只导出确认通过的结果。
+
+`early_stop` 检查已实际执行并归一化的重复，不把尚未执行的场景当作失败依据。发生硬失败后保留已有指标、`infeasible_early` 状态及 `aborted_after` 位置；未执行部分不补零，也不作为完整可行记录。最终确认与 ABA 的参照测量始终跑完整矩阵。`trial-execution.json` 保存状态、成本分解及早停位置，方便区分“已测失败”和“没测完”。
+
+成本记录中的 `startup_s` 是启动至健康检查通过，`benchmark_s` 包含逐重复的缓存/预热钩子和性能命令，`quality_s` 是质量命令，`other_s` 是其余开销；`total_s` 是完整耗时。估计只外推完整 trial，不把早停的短耗时当作完整矩阵的廉价成本。
 
 推荐正式工作流使用 ABA 验证：
 
@@ -306,11 +328,44 @@ LLM 返回 `choices[0].message.content` 中的 JSON 对象，工作流提案结�
 }
 ```
 
-这覆盖 `verification` 全部字段。`mode` 默认 `single`；其他默认值如上。`single` 只独立复测候选；`aba` 对每个入围候选执行基线 A → 候选 C → 基线 B，每组都跑完整场景矩阵和 `final_repetitions`。
+`mode` 默认 `single`；上述其他默认值如示例。`single` 只独立复测候选；`aba` 对每个入围候选执行基线 A → 候选 C → 基线 B，每组都跑完整场景矩阵和 `final_repetitions`。可选 `confirmation_profiles` 是允许最终确认的 profile ID 列表；省略时不额外限制。它不会启用未验证策略，也不会让未入围候选获得确认。RSI 子实验将其限定为 `candidate`，避免候选落选后给参照自身做确认。
 
 逐场景以目标中位数计算 `ref=(A+B)/2`、`drift=abs(A-B)/ref`。最大化的改进率为 `C/ref-1`，最小化为 `ref/C-1`。任一场景漂移超限会使验证无效；最差场景的改进率必须超过 `max(min_relative_improvement, drift_multiplier × 最大漂移)`。
 
 `accepted` 表示候选通过客户门槛且验证有效；`improved` 表示另有足够的改进证据。两者不同：达标不一定显著优于基线。基线可未达客户 SLO，但作为参照必须有完整有效测量。比率验证要求正目标值，非正目标应使用 `single`。
+
+### 可选的独立多组置信区间验证
+
+原 `aba` 的漂移门槛是保守启发式，不是已校准的置信水平。需要同时评估重复测量的不确定度时，可在新任务中预先启用 `aba_ci`：
+
+```json
+{
+  "mode": "aba_ci",
+  "max_baseline_drift": 0.05,
+  "min_relative_improvement": 0.02,
+  "drift_multiplier": 2.0,
+  "ci_blocks": 5,
+  "ci_confidence": 0.95,
+  "ci_max_comparisons": 8,
+  "frozen_files": []
+}
+```
+
+| 字段 | 默认值与限制 |
+|---|---|
+| `ci_blocks` | `5`，预定完整 ABA 组数，整数 `3–100` |
+| `ci_confidence` | `0.95`，严格位于 `0.5` 与 `1` 之间 |
+| `ci_max_comparisons` | `8`，预定比较次数上限，整数 `1–10000`；不得小于工作流 `finalists` 或 Agent `max_experiments` |
+
+每个 block 执行完整 A/C/B，三者各自重新启动服务；每次启动内的 `final_repetitions` 仍用于固定场景的中位数与逐重复硬门槛。统计样本量是 **block 数**，不是同一启动内的压测次数。不能复用同一 trial 冒充多个独立 block，也不能在看到结果后只保留有利组。
+
+可从 `examples/ascend-workflow-ci.json` 和 `examples/inference-rsi-ci.json` 了解完整配置关系。它们仍是需替换模型、命令、兼容性证据和预算的模板，不是已经验证的昇腾默认参数。
+
+每场景、每组以原 ABA 中位数构造方向一致的对数比率：最大化为 `log(C / mean(A,B))`，最小化取反。对跨 block 的这些比率计算 Student t 单侧下界，自由度为 `ci_blocks - 1`；将错误率按“场景数 × `ci_max_comparisons`”作 Bonferroni 分配。报告中的几何平均相对收益与置信下界属于此 log-ratio 估计，不能把它标成原客户目标的中位数、合并请求 P99 或原始基线的跨代收益。
+
+每个 block 的完整性、硬门槛和漂移保护继续生效，跨 block 的参照中心变化也要受限。晋升既要求全部组有明确收益，也要求全部场景的置信下界超过保守改进门槛；不会因为引入 CI 就取消漂移阻断。结果保留逐组裁决及 `relative_improvement_lower_bound`，便于解释“达标但收益证据不足”。
+
+这个区间依赖独立 block、近似正态的 block 对数效果等统计假设。重新启动服务不自动消除温度、竞争进程和时间趋势；零观测方差也不证明没有未观测噪声。`ci_max_comparisons` 只覆盖预定的本任务比较范围，不是任意多次重跑任务后的整体置信保证。应先做同配置独立启动对照、检查现场波动，再决定是否采用此模式；它不是默认替代协议。方法依据见 [统计参考](references.md#统计与测量优化依据)。
 
 冻结关键文件时，填入实际 SHA-256：
 
@@ -415,9 +470,12 @@ python3 -m ascend_poc adaptive-plan \
 | `research/` | 研究问答及相关证据 |
 | `trials/` | 实际配置、分析、日志、原始指标与遥测摘要 |
 | `trials/*/verification.json` | 最终确认的详细判定 |
+| `trials/*/trial-execution.json` | 本轮执行状态、成本分解与可选早停位置 |
 | `best.json`、`best-contract.json` | 仅确认通过时存在；获胜参数及完整固定配置 |
 
-报告中的 `ACCEPTED` 为验收通过，`REJECTED` 为候选不达标，`INVALID` 为参照、完整性、噪声或执行条件不足。`status: completed` 只表示流程结束。没有 `best.json` 就没有独立确认的可交付配置；研究停止、预算不足和候选失败都应如实说明。
+报告中的 `ACCEPTED` 为验收通过，`REJECTED` 为候选不达标，`INVALID` 为参照、完整性、噪声或执行条件不足。`infeasible_early` 是部分探索测量已失败，`skipped_insufficient_budget` 是确认未开始，二者都不冒充完整独立裁决。`status: completed` 只表示流程结束。没有 `best.json` 就没有独立确认的可交付配置；研究停止、预算不足和候选失败都应如实说明。
+
+预算或确认策略导致的跳过记录在 `workflow_state.json` 的 `verification_attempts` 和事件链中，不生成虚假的通过 trial。CI 的 `reference_blocks` 保存各组 before/candidate/after 的 trial ID；前面的候选组使用 `confirmation_block`，最终候选确认记录承载整组裁决，单个中间 block 不能导出赢家。
 
 ```bash
 python3 -m ascend_poc workflow --config customer-workflow.json \
@@ -432,6 +490,8 @@ python3 -m ascend_poc report --output runs/customer-poc
 `best-contract.json` 可用 `tune --planner random` 在新目录复测固定赢家，但不保留工作流的 ABA 分组。需要同样的 ABA 证据，应以原工作流启动新实验。正式交付同时保存配置、环境说明、原始测量、质量结果、确认结果，并在客户保留集复验。
 
 运行指纹包括引用环境值的哈希、软件/Python/控制器信息和可识别直接命令文件；大文件的普通指纹可能仅记录元数据，关键内容应用 `frozen_files` 显式冻结。审计哈希链用于一致性检测，不提供针对同权限恶意修改者的隔离，也不等同于完整 Harbor 沙箱评测。
+
+v0.6.0 只在同一次完整性检查内对多个 profile 共用的源码、解释器及命令文件去重；下一次检查重新读取，不把上一轮摘要当作内容未变的证明。冻结文件仍完整哈希，事件链与 checkpoint 的绑定保持不变。
 
 密钥、客户提示词、日志、权重、私有测试和 `runs/` 不应提交 Git。`context`、兼容性证据、固定命令与本地结果也可能包含客户信息，发布前按实际内容检查。不要将密钥写入 JSON、命令参数或 URL。
 
@@ -450,6 +510,7 @@ python3 -m ascend_poc report --output runs/customer-poc
 | `workload-analyze` | `--input JSONL --output JSON`；请求遥测统计 |
 | `adaptive-plan` | `--config JSON --windows JSON --output JSON`；P/D shadow 建议 |
 | `report` | `--output DIR`；重建 workflow 或 tune 报告 |
+| `agent` | `--config FILE --output DIR [--workdir DIR] [--resume] [--ignore-memory]`；持续实验 Agent，见 [RSI 指南](rsi.md) |
 | `tune` | `--config FILE --output DIR [--planner llm\|random] [--workdir DIR] [--resume]`；兼容的单契约参数优化 |
 | `demo` | `[--output DIR]`，默认 `runs/demo`；旧 tune CPU 演示 |
 
@@ -468,6 +529,8 @@ python3 -m ascend_poc report --output runs/customer-poc
 | 指标缺失/错误率不一致 | 查看原始 JSON 和 adapter；不要补虚假零值；核对计数分母 |
 | TPOT 缺失 | 查看流块、真实 usage 和 TPOT 覆盖率；不可用观察子集代替全量门槛 |
 | ABA 为 INVALID | 检查基线漂移、预算是否容纳完整组、文件或环境是否变化 |
+| 确认因预算被跳过 | 检查观测耗时/粗估值、重复数、CI block 数和剩余时间；跳过不表示候选不达标 |
+| `aba_ci` 达标但不晋升 | 查看逐组收益、置信下界、跨组漂移及预定比较次数；不能事后缩小组数或比较上限 |
 | resume 拒绝或没有预算 | 保持原配置/指纹/日志；预算不因重启延长，变化后开新目录 |
 | shadow 一直 hold | 检查完整等宽窗口、引擎采集、间隔、校准与冷却；不要降低门槛制造收益 |
 

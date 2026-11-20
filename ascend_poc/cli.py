@@ -54,6 +54,7 @@ def main(argv=None) -> int:
     flow.add_argument('--workdir', type=Path, default=Path.cwd())
     flow_validate = commands.add_parser('workflow-validate', help='Validate immutable workload and strategy profiles')
     flow_validate.add_argument('--config', type=Path, required=True)
+    flow_validate.add_argument('--estimate', action='store_true', help='Show confirmation costs from budget.estimated_trial_s, without execution')
     flow_demo = commands.add_parser('workflow-demo', help='Local synthetic A2A, MCP, LLM and benchmark workflow')
     flow_demo.add_argument('--output', type=Path, default=Path('runs/workflow-demo'))
     research = commands.add_parser('research-agent', help='Loopback A2A 0.3 research bridge to DeepWiki MCP')
@@ -75,10 +76,12 @@ def main(argv=None) -> int:
     agent.add_argument('--output', type=Path, required=True)
     agent.add_argument('--workdir', type=Path, default=Path.cwd())
     agent.add_argument('--resume', action='store_true')
+    agent.add_argument('--ignore-memory', action='store_true', help='Isolated control run: neither read nor write persistent experience')
     agent_validate = commands.add_parser('agent-validate', help='Validate an inference RSI agent configuration')
     agent_validate.add_argument('--config', type=Path, required=True)
     agent_demo = commands.add_parser('agent-demo', help='CPU-only synthetic tool-using RSI agent demo')
     agent_demo.add_argument('--output', type=Path, default=Path('runs/rsi-demo'))
+    agent_demo.add_argument('--verification', choices=['aba', 'aba_ci'], default='aba')
     agent_report = commands.add_parser('agent-report', help='Verify agent evidence and regenerate its report')
     agent_report.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
@@ -95,14 +98,14 @@ def main(argv=None) -> int:
             else:
                 from .rsi import run_agent
                 config['_workflow']['_contract']['_repo_dir'] = str(args.workdir.resolve())
-                state = run_agent(config, args.output, resume=args.resume)
+                state = run_agent(config, args.output, resume=args.resume, ignore_memory=args.ignore_memory)
                 print(args.output.resolve() / 'agent_report.md')
                 if not state['champion'].get('experiment_id'):
                     print('No independently improved champion was promoted.', file=sys.stderr)
                     return 2
         elif args.command == 'agent-demo':
             from .rsi_demo import run_agent_demo
-            run_agent_demo(args.output)
+            run_agent_demo(args.output, verification_mode=args.verification)
             print(args.output.resolve() / 'agent_report.md')
         elif args.command == 'agent-report':
             from .rsi import report_agent
@@ -143,6 +146,10 @@ def main(argv=None) -> int:
             spec = load_workflow(args.config)
             if args.command == 'workflow-validate':
                 print(f"Valid workflow: {spec['name']}; {len(eligible_profiles(spec))} eligible strategies")
+                if args.estimate:
+                    from .budget import confirmation_cost
+                    print(json.dumps(confirmation_cost([], spec['budget'], spec['verification'],
+                        spec['profiles'][0]['id'], [None] * spec['budget']['finalists']), indent=2))
             else:
                 spec['_contract']['_repo_dir'] = str(args.workdir.resolve())
                 run_workflow(spec, args.output, resume=args.resume)
