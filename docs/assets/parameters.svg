@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-labelledby="title desc">
-<title id="title">当前模板真正调节的三个参数</title>
-<desc id="desc">max_num_seqs限制每轮可处理的序列数。max_num_batched_tokens限制每轮处理的token预算。gpu_memory_utilization改变实例的设备内存预算。调大均有代价，图形只示意方向。上下文要求在客户验收中固定。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1210" viewBox="0 0 1200 1210" role="img" aria-labelledby="title desc">
+<title id="title">开放参数调优的三个常见例子</title>
+<desc id="desc">max-num-seqs限制每轮可处理的序列数。max-num-batched-tokens限制每轮处理的token预算。gpu-memory-utilization改变实例的设备内存预算。开放模式还可以提议精度、并行、缓存、上下文和嵌套JSON设置。只有客户明确要求限制的推理项才被锁住，可执行性还取决于实际引擎、资产与接线。</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
 <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
-<rect x="0" y="0" width="1200" height="1160" rx="0" fill="#f4f7fb"/>
-<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">三个旋钮：不是越大越好</text>
-<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">当前模板自动搜索这三项；“参数”是同一种工作方法中的数值设置。</text>
+<rect x="0" y="0" width="1200" height="1210" rx="0" fill="#f4f7fb"/>
+<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">三个例子，开放范围不限于此</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">“参数”是工作方法中的设置；Agent 还可以发现并尝试其他推理选项。</text>
 <rect x="44" y="135" width="1112" height="270" rx="18" fill="white"/>
 <text x="70" y="175" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">01  一轮接待多少个序列</text>
-<text x="1126" y="175" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max_num_seqs</text>
+<text x="1126" y="175" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max-num-seqs</text>
 <text x="70" y="213" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像餐厅同一轮能照顾多少桌</text>
 <rect x="68" y="233" width="512" height="148" rx="18" fill="#eff1fb"/>
 <rect x="600" y="233" width="532" height="148" rx="18" fill="#e9f5f3"/>
@@ -34,7 +34,7 @@
 <text x="624" y="359" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能提高吞吐，也可能增加内存与延迟</text>
 <rect x="44" y="425" width="1112" height="270" rx="18" fill="white"/>
 <text x="70" y="465" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">02  一轮处理多少份文字</text>
-<text x="1126" y="465" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max_num_batched_tokens</text>
+<text x="1126" y="465" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max-num-batched-tokens</text>
 <text x="70" y="503" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像厨房这一轮最多处理多少工作量</text>
 <rect x="68" y="523" width="512" height="148" rx="18" fill="#eff1fb"/>
 <rect x="600" y="523" width="532" height="148" rx="18" fill="#e9f5f3"/>
@@ -64,7 +64,7 @@
 <text x="624" y="649" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能提高输入处理效率，也可能拖慢输出</text>
 <rect x="44" y="715" width="1112" height="270" rx="18" fill="white"/>
 <text x="70" y="755" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">03  给实例多少设备内存预算</text>
-<text x="1126" y="755" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">gpu_memory_utilization</text>
+<text x="1126" y="755" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">gpu-memory-utilization</text>
 <text x="70" y="793" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像为服务划出仓库预算，不是算力利用率</text>
 <rect x="68" y="813" width="512" height="148" rx="18" fill="#eff1fb"/>
 <rect x="600" y="813" width="532" height="148" rx="18" fill="#e9f5f3"/>
@@ -78,7 +78,8 @@
 <text x="92" y="939" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">KV 缓存容量可能减少，更容易排队</text>
 <text x="624" y="907" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调大：本实例可用内存预算较多</text>
 <text x="624" y="939" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能容纳更多 KV，但余量少、易内存不足</text>
-<rect x="44" y="1025" width="1112" height="103" rx="18" fill="#fff1df"/>
-<text x="70" y="1063" font-size="25" fill="#9b6314" font-weight="700" text-anchor="start">上下文长度是服务能力约定，不能为了成绩随意缩短</text>
-<text x="70" y="1100" font-size="20" fill="#52677a" font-weight="400" text-anchor="start">max_model_len 在模板中固定；序列名额 ≠ 外部并发用户数。图形仅示意，不按数值比例。</text>
+<rect x="44" y="1025" width="1112" height="153" rx="18" fill="#fff1df"/>
+<text x="70" y="1063" font-size="25" fill="#9b6314" font-weight="700" text-anchor="start">精度、TP 并行、缓存、上下文、嵌套 JSON 也可提议</text>
+<text x="70" y="1100" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">例如 additional-config；能否运行由实际引擎、资产和接线决定。</text>
+<text x="70" y="1134" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">只有用户明确的条件才锁定。序列名额 ≠ 外部并发用户数；图形仅示意方向。</text>
 </svg>

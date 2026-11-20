@@ -29,3 +29,7 @@ jobs:
       - run: python -m ascend_poc agent-report --output runs/ci-rsi-demo
       - run: python -m ascend_poc agent-demo --verification aba_ci --output runs/ci-rsi-block-demo
       - run: python -m ascend_poc agent-report --output runs/ci-rsi-block-demo
+      - run: python -m ascend_poc autotune-validate --runtime examples/open-runtime.json
+      - run: python -m ascend_poc autotune-validate --runtime examples/open-vllm-bench.json
+      - run: python -m ascend_poc autotune-demo --output runs/ci-open-demo
+      - run: python -m ascend_poc autotune-report --output runs/ci-open-demo

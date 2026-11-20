@@ -1,0 +1,5 @@
+使用这次分配的两张 Ascend 910B A2，模型家族是 CUSTOMER_MODEL。
+优先最大化每秒输出 token 数（output_tokens_per_second）。
+首 token 的 P99 不超过 2000 毫秒，每 token 耗时 P99 不超过 50 毫秒。
+每个请求输入 4096 token，输出 512 token。
+没有写明的推理参数、精度、并行布局和请求并发可以调整。

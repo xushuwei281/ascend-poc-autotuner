@@ -37,6 +37,21 @@ def doctor() -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='LLM-assisted Ascend PoC acceptance tuning')
     commands = parser.add_subparsers(dest='command', required=True)
+    opened = commands.add_parser('autotune', help='Optimize all discovered inference options from a natural-language request')
+    opened.add_argument('--runtime', type=Path, required=True)
+    request = opened.add_mutually_exclusive_group(required=True)
+    request.add_argument('--request', help='Natural-language customer requirements')
+    request.add_argument('--request-file', type=Path, help='UTF-8 text requirements')
+    opened.add_argument('--output', type=Path, required=True)
+    opened.add_argument('--workdir', type=Path, default=Path.cwd())
+    opened.add_argument('--plan-only', action='store_true', help='Discover options and compile intent without starting a model service')
+    opened.add_argument('--resume', action='store_true')
+    opened_validate = commands.add_parser('autotune-validate', help='Validate open-mode runtime wiring without API or hardware execution')
+    opened_validate.add_argument('--runtime', type=Path, required=True)
+    opened_demo = commands.add_parser('autotune-demo', help='CPU-only synthetic natural-language open-parameter demo')
+    opened_demo.add_argument('--output', type=Path, default=Path('runs/open-demo'))
+    opened_report = commands.add_parser('autotune-report', help='Verify open-mode evidence and regenerate its report')
+    opened_report.add_argument('--output', type=Path, required=True)
     validate = commands.add_parser('validate', help='Validate a customer contract without execution')
     validate.add_argument('--config', type=Path, required=True)
     start = commands.add_parser('tune', help='Run a baseline, LLM proposals, and final confirmation')
@@ -90,7 +105,33 @@ def main(argv=None) -> int:
         raise KeyboardInterrupt(f'signal {signum}')
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
-        if args.command in {'agent', 'agent-validate'}:
+        if args.command in {'autotune', 'autotune-validate'}:
+            from .open_runtime import load_runtime
+            runtime = load_runtime(args.runtime)
+            if args.command == 'autotune-validate':
+                print(f"Valid open tuning runtime: {runtime['name']}")
+            else:
+                from .open_tuner import run_autotune
+                if args.request_file:
+                    if args.request_file.stat().st_size > 100_000:
+                        raise ValueError('Request text exceeds 100 KiB')
+                    text = args.request_file.read_text(encoding='utf-8')
+                else:
+                    text = args.request
+                state = run_autotune(runtime, text, args.output, workdir=args.workdir,
+                                     plan_only=args.plan_only, resume=args.resume)
+                print(args.output.resolve() / 'report.md')
+                if state['status'] == 'needs_input' or not args.plan_only and not state.get('champion'):
+                    print(state.get('stop_reason', 'No independently improved champion.'), file=sys.stderr)
+                    return 2
+        elif args.command == 'autotune-demo':
+            from .open_demo import run_open_demo
+            run_open_demo(args.output)
+            print(args.output.resolve() / 'report.md')
+        elif args.command == 'autotune-report':
+            from .open_tuner import report_autotune
+            print(report_autotune(args.output))
+        elif args.command in {'agent', 'agent-validate'}:
             from .rsi_config import load_agent
             config = load_agent(args.config)
             if args.command == 'agent-validate':

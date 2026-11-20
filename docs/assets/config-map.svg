@@ -1,46 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1100" viewBox="0 0 1200 1100" role="img" aria-labelledby="title desc">
-<title id="title">三个配置文件和两个不同的大模型角色</title>
-<desc id="desc">customer-agent.json引用customer-workflow.json，工作流再引用customer-contract.json。契约定义固定的硬件、模型、测试与规划API。规划大模型提出建议，昇腾上的被测模型运行真实负载。报告保存过程，冠军配置仅在通过独立验收并晋升后导出。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1180" viewBox="0 0 1200 1180" role="img" aria-labelledby="title desc">
+<title id="title">一份文字需求和一份运行接线</title>
+<desc id="desc">autotune读取用户文字需求与runtime配置。需求生成intent.json中的评分目标和明确约束，未提的推理项开放。runtime提供真实硬件、模型资产、API、固定评测器、环境变量与负载接口，并发现本机CLI参数。规划模型提出候选，NPU运行测量；报告保留配置条件与证据。</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
 <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
-<rect x="0" y="0" width="1200" height="1100" rx="0" fill="#f4f7fb"/>
-<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">先填三张表，再运行 Agent</text>
-<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">JSON 是可编辑的配置表；文件名不重要，引用关系与里面的内容才决定行为。</text>
-<rect x="62" y="141" width="770" height="151" rx="18" fill="#efebf8"/>
-<text x="89" y="180" font-size="25" fill="#7158bb" font-weight="700" text-anchor="start" class="code">customer-agent.json</text>
-<rect x="849" y="157" width="287" height="38" rx="19" fill="#efebf8"/>
-<text x="992.5" y="183" font-size="22" fill="#7158bb" font-weight="600" text-anchor="middle">任务单</text>
-<text x="89" y="225" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">文字任务目标、最大步骤数、实验次数和总时限</text>
-<text x="89" y="259" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">经验文件位置；引用下面的工作流</text>
-<rect x="62" y="341" width="770" height="151" rx="18" fill="#e7f3f1"/>
-<text x="89" y="380" font-size="25" fill="#087f8c" font-weight="700" text-anchor="start" class="code">customer-workflow.json</text>
-<rect x="849" y="357" width="287" height="38" rx="19" fill="#e7f3f1"/>
-<text x="992.5" y="383" font-size="22" fill="#087f8c" font-weight="600" text-anchor="middle">允许尝试的方法</text>
-<text x="89" y="425" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">已验证策略目录、资料查询方式、复测规则</text>
-<text x="89" y="459" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">实验预算；引用下面的客户契约</text>
-<rect x="62" y="541" width="770" height="151" rx="18" fill="#e8effa"/>
-<text x="89" y="580" font-size="25" fill="#2463b5" font-weight="700" text-anchor="start" class="code">customer-contract.json</text>
-<rect x="849" y="557" width="287" height="38" rx="19" fill="#e8effa"/>
-<text x="992.5" y="583" font-size="22" fill="#2463b5" font-weight="600" text-anchor="middle">固定的客户考卷</text>
-<text x="89" y="625" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">模型、卡数、服务与性能 / 质量测试命令</text>
-<text x="89" y="659" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">正式目标与验收门槛、可调范围、规划 API 地址</text>
-<path d="M447 294 L447 333" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<text x="478" y="323" font-size="20" fill="#52677a" font-weight="400" text-anchor="start" class="code">workflow: &quot;customer-workflow.json&quot;</text>
-<path d="M447 494 L447 533" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<text x="478" y="523" font-size="20" fill="#52677a" font-weight="400" text-anchor="start" class="code">contract: &quot;customer-contract.json&quot;</text>
-<text x="858" y="613" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">相对路径均以</text>
-<text x="858" y="646" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">引用者所在目录为起点</text>
-<path d="M300 695 L300 744" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M700 695 L700 721 L900 721 L900 744" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="62" y="756" width="518" height="160" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
-<rect x="612" y="756" width="524" height="160" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
-<text x="89" y="797" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">规划大模型 API</text>
-<text x="89" y="840" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像实验顾问：读指标、给候选建议</text>
-<text x="89" y="874" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">通常是外部 API，不是被测成绩来源</text>
-<text x="638" y="797" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">昇腾上的被测模型服务</text>
-<text x="638" y="840" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像参赛选手：运行固定客户请求</text>
-<text x="638" y="874" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">性能与质量由固定测试脚本记录</text>
-<rect x="62" y="948" width="1074" height="118" rx="18" fill="#e7edf5"/>
-<text x="89" y="988" font-size="26" fill="#17324d" font-weight="700" text-anchor="start">运行后看输出目录</text>
-<text x="89" y="1026" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">agent_report.md：过程与结论；champion*.json：成功晋升后才有的冠军配置。</text>
+<rect x="0" y="0" width="1200" height="1180" rx="0" fill="#f4f7fb"/>
+<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">一份需求 + 一份运行接线，就能交给 Agent</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">你说明要什么；工程师接好真实设备、模型和测试接口。两者一起决定实验。</text>
+<rect x="44" y="140" width="540" height="225" rx="18" fill="#efebf8"/>
+<text x="70" y="182" font-size="28" fill="#7158bb" font-weight="700" text-anchor="start">自然语言需求</text>
+<text x="70" y="221" font-size="22" fill="#7158bb" font-weight="400" text-anchor="start">--request 或 UTF-8 的 .txt 文件</text>
+<text x="70" y="264" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">写清想提高的指标和不能改变的条件。</text>
+<text x="70" y="298" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">没有提出的精度、缓存、延迟等限制，</text>
+<text x="70" y="332" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">不会从旧模板继承为默认门槛。</text>
+<rect x="616" y="140" width="540" height="225" rx="18" fill="#e7f3f1"/>
+<text x="642" y="182" font-size="26" fill="#087f8c" font-weight="700" text-anchor="start" class="code">customer-runtime.json</text>
+<text x="642" y="228" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">真实硬件、模型资产、API、固定评测器</text>
+<text x="642" y="262" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">可用环境变量与负载参数接口</text>
+<text x="642" y="296" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">服务接线、实验预算和独立复核设置</text>
+<text x="642" y="330" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">从 vLLM serve --help=all 发现参数</text>
+<path d="M314 367 L314 407" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M886 367 L886 407" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="44" y="420" width="540" height="160" rx="18" fill="#ece8f5"/>
+<text x="70" y="463" font-size="26" fill="#7158bb" font-weight="700" text-anchor="start">intent.json：需求的正式解释</text>
+<text x="70" y="507" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">评分目标 + 原文明确约束</text>
+<text x="70" y="541" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">请核对解释是否正确；未提的推理项开放。</text>
+<rect x="616" y="420" width="540" height="160" rx="18" fill="#e2f1ee"/>
+<text x="642" y="463" font-size="26" fill="#087f8c" font-weight="700" text-anchor="start">实际可执行的候选范围</text>
+<text x="642" y="507" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">发现的引擎选项、嵌套 JSON、实际资产</text>
+<text x="642" y="541" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">地址、鉴权、结果路径和测试逻辑不参与调参。</text>
+<path d="M314 582 V612 H886 V582" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round"/>
+<path d="M600 612 L600 642" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="225" y="655" width="750" height="88" rx="18" fill="#e8effa"/>
+<text x="600" y="693" font-size="26" fill="#2463b5" font-weight="700" text-anchor="middle">autotune：诊断 → Wiki 研究 → 提案 → 实测</text>
+<text x="600" y="726" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">启动失败也反馈；候选经独立 ABA 复核后才能晋升</text>
+<path d="M400 746 L400 779" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800 746 L800 779" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="44" y="792" width="540" height="158" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
+<rect x="616" y="792" width="540" height="158" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
+<text x="70" y="833" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">规划大模型 API</text>
+<text x="70" y="876" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像实验顾问：读需求、读反馈、给建议</text>
+<text x="70" y="910" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">它的回答不是性能成绩</text>
+<text x="642" y="833" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">昇腾上的被测模型服务</text>
+<text x="642" y="876" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像参赛选手：实际运行并接受固定评测</text>
+<text x="642" y="910" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">模拟测量或 dummy 权重不算真实成绩</text>
+<rect x="44" y="984" width="1112" height="162" rx="18" fill="#e7edf5"/>
+<text x="70" y="1025" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">结果：report.md + 完整候选与测量证据</text>
+<text x="70" y="1067" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">有效晋升后导出 champion.json / champion-contract.json。</text>
+<text x="70" y="1101" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">报告同时写明模型、负载与配置条件；未执行质量测试，就不宣称质量通过。</text>
 </svg>

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1070" viewBox="0 0 1200 1070" role="img" aria-labelledby="title desc">
 <title id="title">推理策略是改变做事方法</title>
-<desc id="desc">前缀缓存复用相同token前缀的KV计算；分块预填充让新请求的长输入与其他已读完输入请求的解码交错；量化减少数值表示所需空间但要验证质量和性能；张量并行分摊模型计算也带来通信成本。四种策略不是都已由仓库自动搜索。</desc>
+<desc id="desc">前缀缓存复用相同token前缀的KV计算；分块预填充让新请求的长输入与其他已读完输入请求的解码交错；量化减少数值表示所需空间但要验证质量和性能；张量并行分摊模型计算也带来通信成本。开放模式可提议这些策略，能否执行取决于实际引擎与可用资产。</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
 <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
 <rect x="0" y="0" width="1200" height="1070" rx="0" fill="#f4f7fb"/>
@@ -11,8 +11,8 @@
 <rect x="44" y="568" width="544" height="412" rx="18" fill="white"/>
 <rect x="612" y="568" width="544" height="412" rx="18" fill="white"/>
 <text x="70" y="176" font-size="25" fill="#2463b5" font-weight="700" text-anchor="start">前缀缓存：重复的开头少算一次</text>
-<rect x="70" y="195" width="257" height="38" rx="19" fill="#e8f0fb"/>
-<text x="198.5" y="221" font-size="18" fill="#2463b5" font-weight="600" text-anchor="middle">已有 profile，默认未启用</text>
+<rect x="70" y="195" width="295" height="38" rx="19" fill="#e8f0fb"/>
+<text x="217.5" y="221" font-size="18" fill="#2463b5" font-weight="600" text-anchor="middle">Agent 可提议开关与相关参数</text>
 <text x="70" y="271" font-size="20" fill="#52677a" font-weight="400" text-anchor="start">请求 A</text>
 <rect x="151" y="244" width="205" height="40" rx="8" fill="#dfeafa"/>
 <text x="253" y="271" font-size="18" fill="#2463b5" font-weight="600" text-anchor="middle">共同的 token 开头</text>
@@ -31,7 +31,7 @@
 <text x="70" y="493" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">很少共享前缀时，收益可能很小。</text>
 <text x="638" y="176" font-size="25" fill="#087f8c" font-weight="700" text-anchor="start">分块预填充：长任务分段穿插</text>
 <rect x="638" y="195" width="300" height="38" rx="19" fill="#e1f2ef"/>
-<text x="788.0" y="221" font-size="18" fill="#087f8c" font-weight="600" text-anchor="middle">模板开启；关闭对照需先验证</text>
+<text x="788.0" y="221" font-size="18" fill="#087f8c" font-weight="600" text-anchor="middle">Agent 可提议分块策略和预算</text>
 <text x="638" y="267" font-size="20" fill="#52677a" font-weight="400" text-anchor="start">P = 长输入分块，D = 其他请求输出</text>
 <text x="638" y="310" font-size="20" fill="#17324d" font-weight="400" text-anchor="start">未分块</text>
 <rect x="732" y="285" width="294" height="40" rx="8" fill="#dfd7f1"/>
@@ -55,8 +55,8 @@
 <text x="638" y="481" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">给这些正在输出的请求留调度机会。</text>
 <text x="638" y="513" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">首字等待与输出间隔的权衡要实测。</text>
 <text x="70" y="612" font-size="25" fill="#7158bb" font-weight="700" text-anchor="start">量化：换成更省空间的表示</text>
-<rect x="70" y="631" width="257" height="38" rx="19" fill="#efebf8"/>
-<text x="198.5" y="657" font-size="18" fill="#7158bb" font-weight="600" text-anchor="middle">当前无现成量化 profile</text>
+<rect x="70" y="631" width="300" height="38" rx="19" fill="#efebf8"/>
+<text x="220.0" y="657" font-size="18" fill="#7158bb" font-weight="600" text-anchor="middle">已准备量化模型资产时可提议</text>
 <rect x="78" y="709" width="184" height="88" rx="18" fill="#e4dcf3"/>
 <text x="170" y="745" font-size="22" fill="#7158bb" font-weight="600" text-anchor="middle">原数值表示</text>
 <text x="170" y="779" font-size="18" fill="#7158bb" font-weight="400" text-anchor="middle">占用更多字节</text>
@@ -65,10 +65,10 @@
 <text x="442" y="762" font-size="22" fill="#087f8c" font-weight="600" text-anchor="middle">更少字节</text>
 <text x="70" y="847" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">可能减少权重 / 缓存占用。</text>
 <text x="70" y="881" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">是否提速取决于可用计算实现。</text>
-<text x="70" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">需兼容模型与格式，并重新验证质量。</text>
+<text x="70" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">有明确质量要求时，按该要求验收。</text>
 <text x="638" y="612" font-size="25" fill="#2463b5" font-weight="700" text-anchor="start">张量并行 TP：多张卡分工</text>
 <rect x="638" y="631" width="300" height="38" rx="19" fill="#e8f0fb"/>
-<text x="788.0" y="657" font-size="18" fill="#2463b5" font-weight="600" text-anchor="middle">模板固定两卡，不自动搜索 TP</text>
+<text x="788.0" y="657" font-size="18" fill="#2463b5" font-weight="600" text-anchor="middle">在物理卡数内开放搜索 TP</text>
 <rect x="744" y="703" width="316" height="47" rx="9" fill="#e3ebfa"/>
 <text x="902" y="735" font-size="20" fill="#2463b5" font-weight="600" text-anchor="middle">把模型计算切分到多张卡</text>
 <path d="M800 754 L800 786" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
@@ -78,8 +78,9 @@
 <rect x="932" y="798" width="179" height="53" rx="10" fill="#ddeef2"/>
 <text x="1021" y="833" font-size="20" fill="#087f8c" font-weight="600" text-anchor="middle">NPU 1 的部分</text>
 <path d="M892 825 L926 825" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-<text x="638" y="903" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">能分摊计算和模型内存，也要相互通信。</text>
-<text x="638" y="935" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">卡数更多不保证更快；卡数须符合约定。</text>
+<text x="638" y="883" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">能分摊计算和模型内存，也要相互通信。</text>
+<text x="638" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">两卡仅作示意；实际并行数可以调整。</text>
+<text x="638" y="947" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">卡数更多不保证更快，须满足明确约束。</text>
 <rect x="44" y="1005" width="1112" height="43" rx="12" fill="#e9eef5"/>
-<text x="600" y="1034" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">目录中的方法要先由工程师验证并开放；Agent 不能只凭查到资料就启用。</text>
+<text x="600" y="1034" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">无需先手工批准 profile；实际版本、模型资产与试运行结果决定可用性。</text>
 </svg>

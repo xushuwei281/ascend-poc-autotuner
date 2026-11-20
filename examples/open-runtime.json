@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "name": "Open Ascend tuning — replace physical assets and evaluator before use",
+  "hardware": {"device_type": "Ascend 910B A2", "device_count": 2, "devices": ["0", "1"]},
+  "models": [{"id": "customer-model-bf16", "path": "{env:MODEL_PATH}", "family": "CUSTOMER_MODEL", "precision": "bf16"}],
+  "server": {
+    "command": ["vllm", "serve", "{model}"],
+    "fixed_options": {"host": "127.0.0.1", "port": 8000, "served-model-name": "poc-model"},
+    "env": {"ASCEND_RT_VISIBLE_DEVICES": "0,1"},
+    "health_url": "http://127.0.0.1:8000/health",
+    "startup_timeout_s": 900,
+    "shutdown_timeout_s": 20
+  },
+  "discovery": {"command": ["vllm", "serve", "--help=all"], "timeout_s": 60, "env_names": []},
+  "baseline": {
+    "model": "customer-model-bf16",
+    "engine": {"tensor-parallel-size": 2, "max-num-seqs": 32, "max-num-batched-tokens": 4096, "gpu-memory-utilization": 0.85, "max-model-len": 8192},
+    "env": {},
+    "workload": {"concurrency": 32, "input_tokens": 4096, "output_tokens": 512, "num_prompts": 1000}
+  },
+  "workload_parameters": {
+    "concurrency": {"type": "integer", "minimum": 1, "description": "Client load offered to the service; free unless the request fixes it."},
+    "input_tokens": {"type": "integer", "minimum": 1, "description": "Synthetic request input length; changing it changes the reported workload."},
+    "output_tokens": {"type": "integer", "minimum": 1, "description": "Synthetic output length; changing it changes the reported workload."},
+    "num_prompts": {"type": "integer", "minimum": 1, "description": "Measured request count. Report sample size; small runs have uncertain tail percentiles."}
+  },
+  "scenarios": [{
+    "name": "customer_score",
+    "command": ["python3", "/opt/customer/run_performance.py", "--base-url", "http://127.0.0.1:8000", "--concurrency", "{workload.concurrency}", "--input-tokens", "{workload.input_tokens}", "--output-tokens", "{workload.output_tokens}", "--num-prompts", "{workload.num_prompts}", "--output", "{trial_dir}/metrics.json"],
+    "result_file": "{trial_dir}/metrics.json", "metrics_format": "canonical", "timeout_s": 900
+  }],
+  "metric_names": ["output_tokens_per_second", "p99_ttft_ms", "p99_tpot_ms", "p99_itl_ms", "error_rate", "completed", "failed"],
+  "benchmark_env": {},
+  "llm": {"base_url": "https://YOUR_PROVIDER_HOST/v1", "model": "YOUR_PROVIDER_MODEL_ID", "api_key_env": "POC_LLM_API_KEY", "timeout_s": 60, "max_tokens": 4000, "temperature": 0.2, "json_mode": true, "max_retries": 0},
+  "research": {"endpoint": "https://mcp.deepwiki.com/mcp", "repository": "vllm-project/vllm-ascend", "timeout_s": 60, "max_calls": 12, "on_error": "stop"},
+  "budget": {"max_experiments": 12, "max_wall_time_s": 14400, "max_llm_calls": 32, "repetitions": 1, "final_repetitions": 3},
+  "verification": {"mode": "aba", "max_baseline_drift": 0.05, "min_relative_improvement": 0.02, "drift_multiplier": 2.0, "frozen_files": []}
+}

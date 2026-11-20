@@ -1,4 +1,6 @@
-# Inference RSI Agent 使用指南
+# 受控 Inference RSI Agent 使用指南
+
+新需求推荐使用 [自然语言全参数调优](open-tuning.md)。本页介绍原 `agent` 命令：固定 profile 与有限候选域、已有记忆和验证协议均保留。新 `autotune` 的能力发现、动态参数和文本需求不使用本页的 profile 前置要求。
 
 先看 [图解调优](tuning-explained.md) 了解参数与策略，再按 [从零复现](quickstart.md) 跑通演示。本页解释 Agent 的具体操作、限制和证据规则。
 
