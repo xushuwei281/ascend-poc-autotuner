@@ -1,3 +1,3 @@
-"""Acceptance-driven Ascend PoC tuning, with a fixed independent evaluator."""
+"""Inference RSI for Ascend PoCs, with fixed independent acceptance tests."""
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"

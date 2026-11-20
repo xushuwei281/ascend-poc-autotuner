@@ -12,4 +12,5 @@ runs/
 customer-config*.json
 customer-workflow*.json
 customer-contract*.json
+customer-agent*.json
 .pytest_cache/

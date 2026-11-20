@@ -1,6 +1,6 @@
 # 参考资料与实现范围
 
-[使用手册](guide.md) 说明如何运行；[架构文档](architecture.md) 说明模块及数据边界。这里记录设计依据和固定参考版本，便于区分借鉴思路、已实现功能和仍需后端适配的能力。
+[RSI 指南](rsi.md) 说明 Agent 用法，[基础手册](guide.md) 说明部署与评测；[架构文档](architecture.md) 说明模块及数据边界。这里记录设计依据和固定参考版本，便于区分借鉴思路、已实现功能和仍需后端适配的能力。
 
 ## 主要参考：EvolvingInfra
 
@@ -52,9 +52,32 @@ EvolvingInfra 将计算角色与 KV 存储分开，利用定制引擎、router �
 
 论文的性能结果属于指定模型、NVIDIA GPU 和实验条件。上游固定缓存返回时间表也来自特定轨迹；这些倍数、等待时间和校准系数都不是本工具的性能承诺或客户通用默认值。
 
-## 评测参考：ResearchBoost / RSI-Infra Bench
+## Agent 参考：ResearchBoost main
 
-ResearchBoost 提供长程优化中的冻结评测、独立裁决和实验记录方法，主要影响本项目的验收与审计部分。
+`main` 与 `bench` 的职责不同：`main` 是组织实际优化任务的 Agent 工作流，`bench` 是用于评估优化 Agent 的冻结任务集合。v0.5.0 同时参考两者，不能把基准包装本身当作 Agent 实现。
+
+| 材料 | 固定版本或入口 |
+|---|---|
+| Agent 工作流 | [`ResearchBoost-Agent@1df28511f3add9101bdac0608ebcd776343a4bb4`](https://github.com/DAGroup-PKU/ResearchBoost-Agent/tree/1df28511f3add9101bdac0608ebcd776343a4bb4) |
+| 过程与评测边界 | [docs/methodology.md](https://github.com/DAGroup-PKU/ResearchBoost-Agent/blob/1df28511f3add9101bdac0608ebcd776343a4bb4/docs/methodology.md) |
+| 长程目标会话 | [docs/goal-mode.md](https://github.com/DAGroup-PKU/ResearchBoost-Agent/blob/1df28511f3add9101bdac0608ebcd776343a4bb4/docs/goal-mode.md) |
+| 实验经验 | [docs/lessons.md](https://github.com/DAGroup-PKU/ResearchBoost-Agent/blob/1df28511f3add9101bdac0608ebcd776343a4bb4/docs/lessons.md) |
+
+上游先由独立的 formulation 过程冻结任务与 judge，再让一个持久 coding-agent 会话按 profile、edit、time、check、log 迭代。它保留失败轮次，外部 supervisor 约束规则和事实，最终由会话外的 judge 裁决。其隔离层、代码编辑和训练等价性验证属于上游具体实现。
+
+| 上游思想 | 本项目的受控实现 | 未声称具备的能力 |
+|---|---|---|
+| 长程目标与工具反馈 | LLM 逐步选择观察、研究、实验、反思、晋升和结束 | 没有接入上游 `/goal` 或 claw-orchestrator 会话 |
+| 一次围绕一个改进假设 | 候选带 hypothesis、expected_effect 及原始测量 | 不自动实现任意源码或 kernel 补丁 |
+| 保留失败与方法经验 | 同作用域案例及 profile 统计，供后续选择实验 | 历史成绩不能代替新环境验收，记忆不保证收益 |
+| 外部独立最终裁决 | 可信执行器和 ABA 验证决定能否晋升 | 不等于已实现 Harbor 或 bubblewrap 沙箱 |
+| 当前最好版本继续改进 | 已晋升冠军成为下一实验参照，记录代际谱系 | 不表示 LLM 权重、推理引擎源码或质量规则在自修改 |
+
+这里的递归是已验证配置和经验反馈到后续实验。提升仍需在固定客户条件下实测；新增工具动作、积累反思文字或增加运行轮数本身不是性能提升证据。
+
+## 评测参考：RSI-Infra Bench
+
+`bench` 分支提供长程优化中的冻结评测、独立裁决和实验记录方法，影响本项目的验收与审计部分。
 
 | 材料 | 固定版本或入口 |
 |---|---|
@@ -64,7 +87,7 @@ ResearchBoost 提供长程优化中的冻结评测、独立裁决和实验记录
 | 对应博客 | [RSI-Infra Bench Preview](https://ai4ai-for-anything.github.io/blog/rsi-infra-bench/) |
 | 博客源码快照 | [`febae5ba10640761bcb7baf0097574158b080715`](https://github.com/AI4AI-for-Anything/AI4AI-for-Anything.github.io/blob/febae5ba10640761bcb7baf0097574158b080715/blog/rsi-infra-bench/index.html)，2026-11-18 |
 
-该博客是本次采用的 Bench 参考，不是较早的 `ydove0324.github.io/hx_resume/blog/researchboost/` 项目介绍。
+该博客对应 Bench 的评测设计；上面的 main 文档用于理解实际 Agent 的运行过程。
 
 | 参考机制 | 本项目对应机制 |
 |---|---|
@@ -83,7 +106,7 @@ ResearchBoost 提供长程优化中的冻结评测、独立裁决和实验记录
 
 ## 归属与复现声明
 
-本项目中的回放、影子建议和验收逻辑是针对本项目接口独立实现的，没有直接复制上述项目的 engine、router、Trie 重放器或训练 judge。此文档记录方法来源，不表示二者为本项目背书。
+本项目中的 Agent、经验、回放、影子建议和验收逻辑是针对本项目接口独立实现的，没有直接复制上述项目的 engine、router、Trie 重放器或训练 judge。此文档记录方法来源，不表示二者为本项目背书。
 
 如果后续直接移入第三方源码，应另外核查对应文件的许可证、版权头与 NOTICE，并保留所需声明，不能仅凭仓库首页的许可证概括所有子目录。
 

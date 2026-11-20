@@ -1,68 +1,61 @@
-# Ascend PoC Autotuner
+# Ascend Inference RSI Agent
 
-面向售前 PoC 的昇腾推理自动调优工具：**固定客户验收条件，测量并分析结果，查询 DeepWiki，调用大模型 API 选择已验证的推理策略与参数，最后独立复测。** 优先满足客户的质量、延迟和可靠性要求，再优化约定的性能指标。
+面向售前 PoC 的昇腾推理优化 Agent。**固定客户验收条件，让大模型自主选择研究、实验、反思和晋升步骤；只有实测达标且优于当前配置的候选，才能成为下一轮优化的起点。** 实验经验跨任务保存，帮助后续实验选择。
 
-Python 3.10+ · Linux · 无运行时第三方依赖 · v0.4.1
+Python 3.10+ · Linux · 无运行时第三方依赖 · v0.5.0
+
+本项目保留包名 `ascend-poc-autotuner`。这里的 RSI 是**配置与策略层的递归改进**：优化后的配置反馈给下一轮，实验经验反馈给 Agent。它不训练大模型权重、不自行改写 kernel，也不执行在线 P/D 角色切换。
 
 ## 快速开始
 
-在仓库根目录运行，无需 NPU、vLLM 或 API key：
+在仓库根目录运行，无需 NPU、vLLM 或外部 API key：
 
 ```bash
-python3 -m ascend_poc workflow-demo --output runs/quickstart
-python3 -m ascend_poc report --output runs/quickstart
+python3 -m ascend_poc agent-demo --output runs/rsi-demo
+python3 -m ascend_poc agent-report --output runs/rsi-demo
 ```
 
-演示实际运行本地 HTTP API 替身、服务及测试子进程，走通 A2A → DeepWiki MCP 替身 → LLM 提案 → 测试 → ABA 复核 → 报告。数据是合成数据，不代表昇腾成绩。再次运行请使用新目录。
-
-查看 `runs/quickstart/workflow_report.md`。只有最终复测通过，才会生成 `best.json` 和可复用的 `best-contract.json`；不会自动部署到生产。
+演示使用本地协议替身与合成指标，展示工具决策、实验反馈和独立验证。查看 `runs/rsi-demo/agent_report.md`；只有成功晋升后，才会生成 `champion.json` 和 `champion-contract.json`。再次演示使用新目录，数字不代表昇腾实测成绩。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| **[完整使用指南](docs/guide.md)** | 部署、客户契约、LLM API、MCP/A2A、策略配置、Agent 回放、验收、恢复和排障 |
-| [架构说明](docs/architecture.md) | 模块职责、数据流、执行边界和审计机制 |
-| [参考来源](docs/references.md) | EvolvingInfra、ResearchBoost 与本项目的对应关系和适用范围 |
-| [开发约定](AGENTS.md) | 为开发者和 coding agent 提供修改与验证规则 |
+| **[Inference RSI Agent 使用指南](docs/rsi.md)** | Agent 配置、工具循环、递归晋升、经验、预算、恢复与结果解读 |
+| [基础测试与部署手册](docs/guide.md) | 昇腾部署前提、客户契约、API、MCP/A2A、策略、回放与评测接入 |
+| [架构说明](docs/architecture.md) | Agent、实验执行器、独立裁决和影子预测之间的边界 |
+| [参考来源](docs/references.md) | EvolvingInfra、ResearchBoost main 与 RSI-Infra Bench 的方法对应 |
+| [开发约定](AGENTS.md) | 开发者与 coding agent 的修改和验证规则 |
 
-## 客户 PoC 工作流
+## 用于客户 PoC
 
-1. 在专用昇腾环境手动跑通服务和客户评测，固定模型、权重、卡数、负载及缓存政策。
-2. 从 [vllm-ascend.json](examples/vllm-ascend.json) 或 [customer-template.json](examples/customer-template.json) 建立验收契约；客户要求精度时接入真实质量评测。
-3. 从 [ascend-workflow.json](examples/ascend-workflow.json) 建立策略目录，引用契约，并填写实际版本与兼容性证据。
-4. 配置大模型 API 环境变量，检查配置，执行工作流，审阅最终报告。
+先按基础手册跑通客户服务及性能/质量评测，固定模型、卡数、负载、缓存政策和验收线。随后建立策略目录与 Agent 配置：
 
 ```bash
-python3 -m ascend_poc doctor
-python3 -m ascend_poc workflow-validate --config customer-workflow.json
-python3 -m ascend_poc workflow \
-  --config customer-workflow.json --output runs/customer-poc --workdir .
+python3 -m ascend_poc agent-validate --config examples/inference-rsi.json
+python3 -m ascend_poc agent \
+  --config customer-agent.json --output runs/customer-rsi --workdir .
 ```
 
-`customer-workflow.json` 是按指南准备的本地文件。示例中的数值、设备、路径和命令需要替换；`workflow-validate` 只验证配置，不证明硬件兼容。模板仅启用基线，其余策略需在现场验证后启用。API key 从环境变量读取，不能写入配置或提交到仓库。
+`customer-agent.json` 按 [Agent 指南](docs/rsi.md) 准备，引用客户工作流；API 从其契约读取。模板参数和路径需要替换，兼容性必须在现场验证。配置检查通过不代表硬件兼容或客户验收通过。密钥只从环境变量读取。
 
-## 能力与边界
+## 工作方式
 
-| 能力 | 当前实现 |
+| 环节 | 实际行为 |
 |---|---|
-| LLM 调优 | OpenAI-compatible Chat Completions；在有限、已批准的策略和参数中选择 |
-| 技术研究 | 直接调用 DeepWiki MCP，或经本项目的 A2A 0.3 同步研究代理查询 |
-| 测试与验收 | 多场景、重复测量、质量钩子、硬门槛、最终 ABA 基线复核 |
-| 证据与恢复 | 命令及原始指标、快照、文件指纹、事件哈希链、预算内断点恢复 |
-| Agent 工作负载 | 固定请求依赖图回放、token/cache 元数据汇总和瓶颈分析 |
-| 动态 P/D | 基于现场校准参数的影子建议；不执行在线角色切换 |
+| 观察与研究 | 查看状态、检索同环境经验、通过 DeepWiki MCP 或本地 A2A 桥查询资料 |
+| 实验与反思 | 提出合法策略/参数及假设，运行固定评测，记录成功、失败和经验 |
+| 独立晋升 | 候选通过客户门槛、ABA 复核及提升阈值，且参照仍是当前代，才可晋升 |
+| 递归改进 | 新冠军成为下一实验参照；经验只帮助选候选，不继承历史成绩 |
+| 结果交付 | 保存事件链、配置快照、实验记录与冠军配置；不自动部署生产 |
 
-主要架构参考为 **EvolvingInfra**，评测方法参考 ResearchBoost。当前执行器通过重启服务测试配置，尚未移植定制 SGLang 引擎、跨节点 KV 管理或无重启 P/D 切换。所有候选都必须保持客户负载及验收规则，LLM 和研究文本不能修改评测器或执行任意命令。
+架构主要参考 EvolvingInfra 的负载感知，Agent 过程参考 ResearchBoost `main`，评测参考其 `bench`。执行器通过启动/停止服务测量配置；`adaptive-plan` 仍只给出 P/D 影子建议。**真实昇腾性能、客户质量和外部模型 API 兼容性需在目标环境验证。**
 
-本地自动化测试与合成端到端工作流已通过，直接 MCP 和 A2A → MCP 的真实 DeepWiki 查询曾验证成功。**尚未在真实昇腾卡或付费大模型 API 上验证性能。** 未观测的 token/cache 数据不会被当作实测零值；未通过最终复核的配置不会作为赢家导出。
-
-## 开发验证
+## 开发与兼容
 
 ```bash
 python3 -m unittest discover -s tests -v
-python3 -m ascend_poc workflow-validate --config examples/ascend-workflow.json
-python3 -m ascend_poc workflow-validate --config examples/ascend-agent-workflow.json
+python3 -m ascend_poc agent-validate --config examples/inference-rsi.json
 ```
 
-主入口为 `python3 -m ascend_poc workflow`。单方案搜索保留 `tune`；其余命令和配置字段统一见 [使用指南](docs/guide.md)。运行记录位于 `runs/`，默认不提交；源码在 `ascend_poc/`，测试在 `tests/`，模板在 `examples/`。
+`workflow` 保留一次固定目录内的研究调优，`tune` 保留单方案参数搜索；原配置与命令继续使用，见 [基础手册](docs/guide.md)。源码在 `ascend_poc/`，模板在 `examples/`，测试在 `tests/`；运行日志、经验文件及客户配置不应提交到 Git。

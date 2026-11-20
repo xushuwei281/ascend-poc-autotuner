@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Ascend inference RSI agent — replace templates before customer use",
+  "goal": "在客户固定负载、精度、硬件预算和验收门槛内，研究已批准策略并执行可证伪实验。只有独立 ABA 验收与显著提升同时成立才晋升；记录失败与未知，并复用相同环境的经验提出下一代候选。",
+  "workflow": "ascend-workflow.json",
+  "memory_file": "../runs/rsi-memory.json",
+  "settings": {
+    "max_steps": 40,
+    "max_experiments": 8,
+    "max_wall_time_s": 7200,
+    "experiment_timeout_s": 900,
+    "max_llm_calls": 80,
+    "max_research_calls": 12,
+    "max_consecutive_tool_errors": 3
+  }
+}

@@ -22,3 +22,6 @@ jobs:
       - run: python -m ascend_poc report --output runs/ci-workflow-demo
       - run: python -m ascend_poc workflow-validate --config examples/ascend-agent-workflow.json
       - run: python -m ascend_poc adaptive-plan --config examples/adaptive-shadow.json --windows examples/adaptive-windows.json --output runs/ci-shadow.json
+      - run: python -m ascend_poc agent-validate --config examples/inference-rsi.json
+      - run: python -m ascend_poc agent-demo --output runs/ci-rsi-demo
+      - run: python -m ascend_poc agent-report --output runs/ci-rsi-demo

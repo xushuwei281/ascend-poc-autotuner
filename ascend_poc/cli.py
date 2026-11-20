@@ -70,13 +70,44 @@ def main(argv=None) -> int:
     adaptive.add_argument('--output', type=Path, required=True)
     report = commands.add_parser('report', help='Regenerate report from saved measurements')
     report.add_argument('--output', type=Path, required=True)
+    agent = commands.add_parser('agent', help='Run the bounded inference RSI tool-using agent')
+    agent.add_argument('--config', type=Path, required=True)
+    agent.add_argument('--output', type=Path, required=True)
+    agent.add_argument('--workdir', type=Path, default=Path.cwd())
+    agent.add_argument('--resume', action='store_true')
+    agent_validate = commands.add_parser('agent-validate', help='Validate an inference RSI agent configuration')
+    agent_validate.add_argument('--config', type=Path, required=True)
+    agent_demo = commands.add_parser('agent-demo', help='CPU-only synthetic tool-using RSI agent demo')
+    agent_demo.add_argument('--output', type=Path, default=Path('runs/rsi-demo'))
+    agent_report = commands.add_parser('agent-report', help='Verify agent evidence and regenerate its report')
+    agent_report.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
 
     def interrupted(signum, _frame):
         raise KeyboardInterrupt(f'signal {signum}')
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
-        if args.command == 'doctor':
+        if args.command in {'agent', 'agent-validate'}:
+            from .rsi_config import load_agent
+            config = load_agent(args.config)
+            if args.command == 'agent-validate':
+                print(f"Valid inference RSI agent: {config['name']}")
+            else:
+                from .rsi import run_agent
+                config['_workflow']['_contract']['_repo_dir'] = str(args.workdir.resolve())
+                state = run_agent(config, args.output, resume=args.resume)
+                print(args.output.resolve() / 'agent_report.md')
+                if not state['champion'].get('experiment_id'):
+                    print('No independently improved champion was promoted.', file=sys.stderr)
+                    return 2
+        elif args.command == 'agent-demo':
+            from .rsi_demo import run_agent_demo
+            run_agent_demo(args.output)
+            print(args.output.resolve() / 'agent_report.md')
+        elif args.command == 'agent-report':
+            from .rsi import report_agent
+            print(report_agent(args.output))
+        elif args.command == 'doctor':
             print(json.dumps(doctor(), ensure_ascii=False, indent=2))
         elif args.command == 'workload-analyze':
             from .workload import load_telemetry
