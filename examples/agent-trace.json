@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "requests": [
+    {
+      "id": "task-1",
+      "agent_id": "demo-task",
+      "branch_id": "main",
+      "context_version": 0,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a concise technical assistant."
+        },
+        {
+          "role": "user",
+          "content": "Explain prefill and decode in two sentences."
+        }
+      ],
+      "max_tokens": 128
+    },
+    {
+      "id": "branch-a",
+      "after": [
+        "task-1"
+      ],
+      "delay_s": 0.1,
+      "agent_id": "demo-task",
+      "branch_id": "a",
+      "context_version": 0,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a concise technical assistant."
+        },
+        {
+          "role": "user",
+          "content": "Give two ways to measure time to first token."
+        }
+      ],
+      "max_tokens": 96
+    },
+    {
+      "id": "branch-b",
+      "after": [
+        "task-1"
+      ],
+      "delay_s": 0.1,
+      "agent_id": "demo-task",
+      "branch_id": "b",
+      "context_version": 0,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a concise technical assistant."
+        },
+        {
+          "role": "user",
+          "content": "Explain why cached input is not the same as uncached prefill work."
+        }
+      ],
+      "max_tokens": 256
+    },
+    {
+      "id": "join",
+      "after": [
+        "branch-a",
+        "branch-b"
+      ],
+      "delay_s": 0.1,
+      "agent_id": "demo-task",
+      "branch_id": "main",
+      "context_version": 1,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are a concise technical assistant."
+        },
+        {
+          "role": "user",
+          "content": "Recorded summary: measure TTFT from client submission and count cached tokens separately. Provide a short PoC measurement checklist."
+        }
+      ],
+      "max_tokens": 128
+    }
+  ]
+}

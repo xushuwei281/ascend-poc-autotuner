@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "name": "Customer benchmark and accuracy adapter template",
+  "description": "Performance-only template. Pin your supported stack, model and customer workload first.",
+  "resource_id": "ascend-devices-0-1",
+  "context": {
+    "hardware": "Replace with NPU type, count and topology",
+    "model_family": "Replace with approved model/revision",
+    "workload": "Customer-owned fixed performance and quality tests"
+  },
+  "llm": {
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "REPLACE_WITH_YOUR_PROVIDER_MODEL_ID",
+    "api_key_env": "POC_LLM_API_KEY",
+    "timeout_s": 60,
+    "max_tokens": 1200,
+    "temperature": 0.2,
+    "json_mode": true,
+    "max_retries": 2
+  },
+  "budget": {
+    "max_trials": 12,
+    "max_wall_time_s": 14400,
+    "repetitions": 3,
+    "final_repetitions": 3,
+    "finalists": 2
+  },
+  "search_space": {
+    "max_num_seqs": [
+      32,
+      64,
+      128
+    ],
+    "max_num_batched_tokens": [
+      2048,
+      4096,
+      8192
+    ],
+    "gpu_memory_utilization": [
+      0.85,
+      0.9
+    ]
+  },
+  "baseline": {
+    "max_num_seqs": 32,
+    "max_num_batched_tokens": 4096,
+    "gpu_memory_utilization": 0.85
+  },
+  "constraints": [],
+  "objective": {
+    "metric": "output_tokens_per_second",
+    "direction": "maximize",
+    "scenario_aggregation": "min"
+  },
+  "requirements": {
+    "p99_ttft_ms": {
+      "max": 2000
+    },
+    "p99_tpot_ms": {
+      "max": 50
+    },
+    "error_rate": {
+      "max": 0.001
+    },
+    "completed": {
+      "min": 999
+    },
+    "quality_score": {
+      "min": 0.95
+    }
+  },
+  "server": {
+    "command": [
+      "vllm",
+      "serve",
+      "{env:MODEL_PATH}",
+      "--served-model-name",
+      "poc-model",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8000",
+      "--tensor-parallel-size",
+      "2",
+      "--max-model-len",
+      "8192",
+      "--enable-chunked-prefill",
+      "--no-enable-prefix-caching",
+      "--max-num-seqs",
+      "{param.max_num_seqs}",
+      "--max-num-batched-tokens",
+      "{param.max_num_batched_tokens}",
+      "--gpu-memory-utilization",
+      "{param.gpu_memory_utilization}"
+    ],
+    "env": {
+      "ASCEND_RT_VISIBLE_DEVICES": "0,1"
+    },
+    "health_url": "http://127.0.0.1:8000/health",
+    "startup_timeout_s": 900,
+    "shutdown_timeout_s": 20
+  },
+  "scenarios": [
+    {
+      "name": "customer_acceptance",
+      "command": [
+        "python3",
+        "/opt/customer/run_performance.py",
+        "--base-url",
+        "http://127.0.0.1:8000",
+        "--output",
+        "{trial_dir}/metrics.json"
+      ],
+      "result_file": "{trial_dir}/metrics.json",
+      "metrics_format": "canonical",
+      "timeout_s": 900,
+      "quality_command": [
+        "python3",
+        "/opt/customer/run_quality.py",
+        "--base-url",
+        "http://127.0.0.1:8000",
+        "--output",
+        "{trial_dir}/quality.json"
+      ],
+      "quality_result_file": "{trial_dir}/quality.json"
+    }
+  ]
+}

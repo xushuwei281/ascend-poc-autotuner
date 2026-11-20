@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "verification": {
+    "mode": "aba",
+    "max_baseline_drift": 0.05,
+    "min_relative_improvement": 0.02,
+    "drift_multiplier": 2.0,
+    "frozen_files": []
+  },
+  "name": "Ascend customer acceptance strategy workflow — edit before hardware use",
+  "contract": "vllm-ascend.json",
+  "budget": {
+    "max_trials": 12,
+    "max_wall_time_s": 14400,
+    "repetitions": 3,
+    "final_repetitions": 3,
+    "finalists": 2
+  },
+  "research": {
+    "transport": "mcp",
+    "endpoint": "https://mcp.deepwiki.com/mcp",
+    "repository": "vllm-project/vllm-ascend",
+    "timeout_s": 60,
+    "max_calls": 12,
+    "on_error": "stop"
+  },
+  "profiles": [
+    {
+      "id": "baseline",
+      "description": "Inherit the fixed known-good server recipe; replace compatibility evidence before real hardware execution.",
+      "enabled": true,
+      "compatibility": {
+        "status": "verified",
+        "evidence": [
+          "TEMPLATE ONLY: operator must replace this with exact hardware, model revision, stack versions and successful baseline run evidence before real use."
+        ],
+        "reason": "Baseline is inherited from the operator-maintained frozen contract; this template does not establish hardware compatibility."
+      }
+    },
+    {
+      "id": "eager",
+      "description": "Disable graph capture with enforce-eager and measure latency/throughput tradeoffs.",
+      "enabled": false,
+      "server": {
+        "command": [
+          "vllm",
+          "serve",
+          "{env:MODEL_PATH}",
+          "--served-model-name",
+          "poc-model",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8000",
+          "--tensor-parallel-size",
+          "2",
+          "--max-model-len",
+          "8192",
+          "--enable-chunked-prefill",
+          "--no-enable-prefix-caching",
+          "--max-num-seqs",
+          "{param.max_num_seqs}",
+          "--max-num-batched-tokens",
+          "{param.max_num_batched_tokens}",
+          "--gpu-memory-utilization",
+          "{param.gpu_memory_utilization}",
+          "--enforce-eager"
+        ],
+        "env": {
+          "ASCEND_RT_VISIBLE_DEVICES": "0,1"
+        },
+        "health_url": "http://127.0.0.1:8000/health",
+        "startup_timeout_s": 900,
+        "shutdown_timeout_s": 20
+      },
+      "compatibility": {
+        "status": "unverified",
+        "evidence": [],
+        "reason": "Confirm enforce-eager support and actual effective graph mode for this Ascend stack."
+      }
+    },
+    {
+      "id": "prefix_cache",
+      "description": "Enable automatic prefix caching for an unchanged customer request distribution.",
+      "enabled": false,
+      "server": {
+        "command": [
+          "vllm",
+          "serve",
+          "{env:MODEL_PATH}",
+          "--served-model-name",
+          "poc-model",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8000",
+          "--tensor-parallel-size",
+          "2",
+          "--max-model-len",
+          "8192",
+          "--enable-chunked-prefill",
+          "--enable-prefix-caching",
+          "--max-num-seqs",
+          "{param.max_num_seqs}",
+          "--max-num-batched-tokens",
+          "{param.max_num_batched_tokens}",
+          "--gpu-memory-utilization",
+          "{param.gpu_memory_utilization}"
+        ],
+        "env": {
+          "ASCEND_RT_VISIBLE_DEVICES": "0,1"
+        },
+        "health_url": "http://127.0.0.1:8000/health",
+        "startup_timeout_s": 900,
+        "shutdown_timeout_s": 20
+      },
+      "compatibility": {
+        "status": "unverified",
+        "evidence": [],
+        "reason": "Confirm prefix caching support and agreed cold/warm cache policy. Random prompts may have little reuse."
+      }
+    },
+    {
+      "id": "unchunked_prefill",
+      "description": "Disable chunked prefill with an explicit token budget covering the model context.",
+      "enabled": false,
+      "server": {
+        "command": [
+          "vllm",
+          "serve",
+          "{env:MODEL_PATH}",
+          "--served-model-name",
+          "poc-model",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "8000",
+          "--tensor-parallel-size",
+          "2",
+          "--max-model-len",
+          "8192",
+          "--no-enable-chunked-prefill",
+          "--no-enable-prefix-caching",
+          "--max-num-seqs",
+          "{param.max_num_seqs}",
+          "--max-num-batched-tokens",
+          "{param.max_num_batched_tokens}",
+          "--gpu-memory-utilization",
+          "{param.gpu_memory_utilization}"
+        ],
+        "env": {
+          "ASCEND_RT_VISIBLE_DEVICES": "0,1"
+        },
+        "health_url": "http://127.0.0.1:8000/health",
+        "startup_timeout_s": 900,
+        "shutdown_timeout_s": 20
+      },
+      "compatibility": {
+        "status": "unverified",
+        "evidence": [],
+        "reason": "Check model support, installed CLI spelling and token budget >= max-model-len=8192."
+      },
+      "search_space": {
+        "max_num_seqs": [
+          32,
+          64,
+          128
+        ],
+        "max_num_batched_tokens": [
+          8192,
+          16384
+        ],
+        "gpu_memory_utilization": [
+          0.85,
+          0.9
+        ]
+      },
+      "baseline": {
+        "max_num_seqs": 32,
+        "max_num_batched_tokens": 8192,
+        "gpu_memory_utilization": 0.85
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ascend-poc-autotuner"
+version = "0.4.1"
+description = "Research-backed A2A/MCP workflow for acceptance-driven vLLM-Ascend PoC tuning"
+requires-python = ">=3.10"
+dependencies = []
+readme = "README.md"
+
+[project.scripts]
+ascend-poc = "ascend_poc.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ascend_poc*"]

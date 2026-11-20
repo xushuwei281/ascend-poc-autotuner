@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "name": "Ascend customer PoC — edit before hardware execution",
+  "description": "Performance-only template. Pin your supported stack, model and customer workload first.",
+  "resource_id": "ascend-devices-0-1",
+  "context": {
+    "hardware": "Replace with NPU type, count and topology",
+    "model_family": "Replace with approved model/revision",
+    "workload": "Fixed 4096 input, 512 output tokens, concurrency cap 32; synthetic performance only"
+  },
+  "llm": {
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "REPLACE_WITH_YOUR_PROVIDER_MODEL_ID",
+    "api_key_env": "POC_LLM_API_KEY",
+    "timeout_s": 60,
+    "max_tokens": 1200,
+    "temperature": 0.2,
+    "json_mode": true,
+    "max_retries": 2
+  },
+  "budget": {
+    "max_trials": 12,
+    "max_wall_time_s": 14400,
+    "repetitions": 3,
+    "final_repetitions": 3,
+    "finalists": 2
+  },
+  "search_space": {
+    "max_num_seqs": [
+      32,
+      64,
+      128
+    ],
+    "max_num_batched_tokens": [
+      2048,
+      4096,
+      8192
+    ],
+    "gpu_memory_utilization": [
+      0.85,
+      0.9
+    ]
+  },
+  "baseline": {
+    "max_num_seqs": 32,
+    "max_num_batched_tokens": 4096,
+    "gpu_memory_utilization": 0.85
+  },
+  "constraints": [],
+  "objective": {
+    "metric": "output_tokens_per_second",
+    "direction": "maximize",
+    "scenario_aggregation": "min"
+  },
+  "requirements": {
+    "p99_ttft_ms": {
+      "max": 2000
+    },
+    "p99_tpot_ms": {
+      "max": 50
+    },
+    "error_rate": {
+      "max": 0.001
+    },
+    "completed": {
+      "min": 999
+    }
+  },
+  "server": {
+    "command": [
+      "vllm",
+      "serve",
+      "{env:MODEL_PATH}",
+      "--served-model-name",
+      "poc-model",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8000",
+      "--tensor-parallel-size",
+      "2",
+      "--max-model-len",
+      "8192",
+      "--enable-chunked-prefill",
+      "--no-enable-prefix-caching",
+      "--max-num-seqs",
+      "{param.max_num_seqs}",
+      "--max-num-batched-tokens",
+      "{param.max_num_batched_tokens}",
+      "--gpu-memory-utilization",
+      "{param.gpu_memory_utilization}"
+    ],
+    "env": {
+      "ASCEND_RT_VISIBLE_DEVICES": "0,1"
+    },
+    "health_url": "http://127.0.0.1:8000/health",
+    "startup_timeout_s": 900,
+    "shutdown_timeout_s": 20
+  },
+  "scenarios": [
+    {
+      "name": "synthetic_4k_512_c32",
+      "command": [
+        "vllm",
+        "bench",
+        "serve",
+        "--model",
+        "{env:MODEL_PATH}",
+        "--served-model-name",
+        "poc-model",
+        "--base-url",
+        "http://127.0.0.1:8000",
+        "--backend",
+        "vllm",
+        "--endpoint",
+        "/v1/completions",
+        "--dataset-name",
+        "random",
+        "--random-input-len",
+        "4096",
+        "--random-output-len",
+        "512",
+        "--random-range-ratio",
+        "0",
+        "--ignore-eos",
+        "--num-prompts",
+        "1000",
+        "--num-warmups",
+        "20",
+        "--request-rate",
+        "inf",
+        "--max-concurrency",
+        "32",
+        "--seed",
+        "42",
+        "--percentile-metrics",
+        "ttft,tpot,itl,e2el",
+        "--metric-percentiles",
+        "50,95,99",
+        "--save-result",
+        "--result-dir",
+        "{trial_dir}",
+        "--result-filename",
+        "metrics.json"
+      ],
+      "result_file": "{trial_dir}/metrics.json",
+      "metrics_format": "vllm",
+      "timeout_s": 900
+    }
+  ]
+}

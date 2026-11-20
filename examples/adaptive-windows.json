@@ -1,0 +1,41 @@
+[
+  {
+    "start_s": 0,
+    "end_s": 60,
+    "completed_requests": 30,
+    "mean_uncached_tokens": 8000,
+    "mean_cached_tokens": 1000,
+    "mean_output_tokens": 128,
+    "mean_accepted_tokens_per_step": 1,
+    "decode_population": 64,
+    "mean_new_tokens_per_prefill_iteration": 4096,
+    "restore_fraction": 0.2,
+    "max_observation_gap_s": 3
+  },
+  {
+    "start_s": 60,
+    "end_s": 120,
+    "completed_requests": 30,
+    "mean_uncached_tokens": 8000,
+    "mean_cached_tokens": 1000,
+    "mean_output_tokens": 128,
+    "mean_accepted_tokens_per_step": 1,
+    "decode_population": 64,
+    "mean_new_tokens_per_prefill_iteration": 4096,
+    "restore_fraction": 0.2,
+    "max_observation_gap_s": 3
+  },
+  {
+    "start_s": 120,
+    "end_s": 180,
+    "completed_requests": 30,
+    "mean_uncached_tokens": 8000,
+    "mean_cached_tokens": 1000,
+    "mean_output_tokens": 128,
+    "mean_accepted_tokens_per_step": 1,
+    "decode_population": 64,
+    "mean_new_tokens_per_prefill_iteration": 4096,
+    "restore_fraction": 0.2,
+    "max_observation_gap_s": 3
+  }
+]
