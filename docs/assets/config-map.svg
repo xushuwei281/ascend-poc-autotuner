@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1100" viewBox="0 0 1200 1100" role="img" aria-labelledby="title desc">
+<title id="title">三个配置文件和两个不同的大模型角色</title>
+<desc id="desc">customer-agent.json引用customer-workflow.json，工作流再引用customer-contract.json。契约定义固定的硬件、模型、测试与规划API。规划大模型提出建议，昇腾上的被测模型运行真实负载。报告保存过程，冠军配置仅在通过独立验收并晋升后导出。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
+<rect x="0" y="0" width="1200" height="1100" rx="0" fill="#f4f7fb"/>
+<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">先填三张表，再运行 Agent</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">JSON 是可编辑的配置表；文件名不重要，引用关系与里面的内容才决定行为。</text>
+<rect x="62" y="141" width="770" height="151" rx="18" fill="#efebf8"/>
+<text x="89" y="180" font-size="25" fill="#7158bb" font-weight="700" text-anchor="start" class="code">customer-agent.json</text>
+<rect x="849" y="157" width="287" height="38" rx="19" fill="#efebf8"/>
+<text x="992.5" y="183" font-size="22" fill="#7158bb" font-weight="600" text-anchor="middle">任务单</text>
+<text x="89" y="225" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">文字任务目标、最大步骤数、实验次数和总时限</text>
+<text x="89" y="259" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">经验文件位置；引用下面的工作流</text>
+<rect x="62" y="341" width="770" height="151" rx="18" fill="#e7f3f1"/>
+<text x="89" y="380" font-size="25" fill="#087f8c" font-weight="700" text-anchor="start" class="code">customer-workflow.json</text>
+<rect x="849" y="357" width="287" height="38" rx="19" fill="#e7f3f1"/>
+<text x="992.5" y="383" font-size="22" fill="#087f8c" font-weight="600" text-anchor="middle">允许尝试的方法</text>
+<text x="89" y="425" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">已验证策略目录、资料查询方式、复测规则</text>
+<text x="89" y="459" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">实验预算；引用下面的客户契约</text>
+<rect x="62" y="541" width="770" height="151" rx="18" fill="#e8effa"/>
+<text x="89" y="580" font-size="25" fill="#2463b5" font-weight="700" text-anchor="start" class="code">customer-contract.json</text>
+<rect x="849" y="557" width="287" height="38" rx="19" fill="#e8effa"/>
+<text x="992.5" y="583" font-size="22" fill="#2463b5" font-weight="600" text-anchor="middle">固定的客户考卷</text>
+<text x="89" y="625" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">模型、卡数、服务与性能 / 质量测试命令</text>
+<text x="89" y="659" font-size="23" fill="#52677a" font-weight="400" text-anchor="start">正式目标与验收门槛、可调范围、规划 API 地址</text>
+<path d="M447 294 L447 333" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="478" y="323" font-size="20" fill="#52677a" font-weight="400" text-anchor="start" class="code">workflow: &quot;customer-workflow.json&quot;</text>
+<path d="M447 494 L447 533" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="478" y="523" font-size="20" fill="#52677a" font-weight="400" text-anchor="start" class="code">contract: &quot;customer-contract.json&quot;</text>
+<text x="858" y="613" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">相对路径均以</text>
+<text x="858" y="646" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">引用者所在目录为起点</text>
+<path d="M300 695 L300 744" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M700 695 L700 721 L900 721 L900 744" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="62" y="756" width="518" height="160" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
+<rect x="612" y="756" width="524" height="160" rx="18" fill="white" stroke="#d6dfea" stroke-width="2"/>
+<text x="89" y="797" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">规划大模型 API</text>
+<text x="89" y="840" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像实验顾问：读指标、给候选建议</text>
+<text x="89" y="874" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">通常是外部 API，不是被测成绩来源</text>
+<text x="638" y="797" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">昇腾上的被测模型服务</text>
+<text x="638" y="840" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">像参赛选手：运行固定客户请求</text>
+<text x="638" y="874" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">性能与质量由固定测试脚本记录</text>
+<rect x="62" y="948" width="1074" height="118" rx="18" fill="#e7edf5"/>
+<text x="89" y="988" font-size="26" fill="#17324d" font-weight="700" text-anchor="start">运行后看输出目录</text>
+<text x="89" y="1026" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">agent_report.md：过程与结论；champion*.json：成功晋升后才有的冠军配置。</text>
+</svg>

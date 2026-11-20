@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - run: python scripts/render_docs_diagrams.py --check
       - run: python -m unittest discover -s tests -v
       - run: python -m ascend_poc validate --config examples/vllm-ascend.json
       - run: python -m ascend_poc validate --config examples/customer-template.json

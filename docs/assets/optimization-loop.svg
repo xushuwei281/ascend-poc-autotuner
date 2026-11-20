@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1080" viewBox="0 0 1200 1080" role="img" aria-labelledby="title desc">
+<title id="title">这个仓库怎样找到更合适的推理配置</title>
+<desc id="desc">客户先固定验收规则。Agent查资料并提出允许的候选，控制器启动服务测试。通过硬门槛和独立复测且提升足够的候选晋升，否则保留原配置。结果反馈给下一轮，预算限制循环。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
+<rect x="0" y="0" width="1200" height="1080" rx="0" fill="#f4f7fb"/>
+<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">从客户标准出发，一轮一轮验证</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">把 Agent 当作实验助手：提出方案、跑测试、看证据，再决定是否保留。</text>
+<rect x="44" y="132" width="1112" height="105" rx="18" fill="#e6effb"/>
+<text x="70" y="173" font-size="27" fill="#2463b5" font-weight="700" text-anchor="start">先固定“考卷”和“及格线”</text>
+<text x="70" y="211" font-size="22" fill="#17324d" font-weight="400" text-anchor="start">同一模型与卡数 · 同一批请求 · 同一答案质量要求 · 同一延迟与错误率门槛</text>
+<path d="M600 238 L600 269" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="230" y="282" width="740" height="139" rx="18" fill="#edf0fb"/>
+<text x="258" y="322" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">1  提出一个允许尝试的方案</text>
+<text x="258" y="361" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">Agent 结合资料与历史实验，选择策略和参数。</text>
+<text x="258" y="393" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">只能从工程师已验证并开放的目录中选择。</text>
+<rect x="230" y="456" width="740" height="139" rx="18" fill="#e8f5f5"/>
+<text x="258" y="496" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">2  按固定规则实测</text>
+<text x="258" y="535" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">控制器启动该配置，执行性能与质量测试。</text>
+<text x="258" y="567" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">记录快慢、失败和实际消耗；失败也留下证据。</text>
+<rect x="230" y="630" width="740" height="139" rx="18" fill="#eaf1fb"/>
+<text x="258" y="670" font-size="27" fill="#2463b5" font-weight="700" text-anchor="start">3  检查是否值得替换</text>
+<text x="258" y="709" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">先满足全部客户门槛，再进行独立复测。</text>
+<text x="258" y="741" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">比较当前配置 → 候选 → 当前配置，检查环境波动。</text>
+<path d="M600 422 L600 449" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600 596 L600 623" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M460 770 L460 806 L305 806 L305 830" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M740 770 L740 806 L895 806 L895 830" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="70" y="840" width="470" height="113" rx="18" fill="#e5f3ea"/>
+<text x="305" y="879" font-size="25" fill="#267247" font-weight="700" text-anchor="middle">合格，且提升足够</text>
+<text x="305" y="917" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">晋升为新冠军，作为下一轮参照</text>
+<rect x="660" y="840" width="470" height="113" rx="18" fill="#fff0df"/>
+<text x="895" y="879" font-size="25" fill="#9b6314" font-weight="700" text-anchor="middle">未通过 / 证据不足</text>
+<text x="895" y="917" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">保留原冠军，记录原因再选方案</text>
+<path d="M70 895 L44 895 L44 351 L220 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
+<path d="M1130 895 L1156 895 L1156 351 L980 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
+<rect x="69" y="522" width="133" height="38" rx="19" fill="#eef1f6"/>
+<text x="135.5" y="548" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">下一轮</text>
+<rect x="995" y="522" width="133" height="38" rx="19" fill="#eef1f6"/>
+<text x="1061.5" y="548" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">下一轮</text>
+<rect x="44" y="984" width="1112" height="65" rx="18" fill="white"/>
+<text x="600" y="1024" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">到达预算或停止条件就结束 · 每个测量配置重新启动服务 · 不自动切换生产流量</text>
+</svg>

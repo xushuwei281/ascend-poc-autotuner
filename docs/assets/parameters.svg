@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-labelledby="title desc">
+<title id="title">当前模板真正调节的三个参数</title>
+<desc id="desc">max_num_seqs限制每轮可处理的序列数。max_num_batched_tokens限制每轮处理的token预算。gpu_memory_utilization改变实例的设备内存预算。调大均有代价，图形只示意方向。上下文要求在客户验收中固定。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
+<rect x="0" y="0" width="1200" height="1160" rx="0" fill="#f4f7fb"/>
+<text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">三个旋钮：不是越大越好</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">当前模板自动搜索这三项；“参数”是同一种工作方法中的数值设置。</text>
+<rect x="44" y="135" width="1112" height="270" rx="18" fill="white"/>
+<text x="70" y="175" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">01  一轮接待多少个序列</text>
+<text x="1126" y="175" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max_num_seqs</text>
+<text x="70" y="213" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像餐厅同一轮能照顾多少桌</text>
+<rect x="68" y="233" width="512" height="148" rx="18" fill="#eff1fb"/>
+<rect x="600" y="233" width="532" height="148" rx="18" fill="#e9f5f3"/>
+<rect x="92" y="249" width="43" height="44" rx="9" fill="#7158bb"/>
+<rect x="144" y="249" width="43" height="44" rx="9" fill="#7158bb"/>
+<rect x="196" y="249" width="43" height="44" rx="9" fill="#7158bb"/>
+<rect x="248" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="300" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="352" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="404" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="456" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="624" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="676" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="728" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="780" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="832" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="884" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="936" y="249" width="43" height="44" rx="9" fill="#087f8c"/>
+<rect x="988" y="249" width="43" height="44" rx="9" fill="#e6ebf2"/>
+<text x="92" y="327" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调小：每轮处理的序列较少</text>
+<text x="92" y="359" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能更易控制延迟，也可能吃不满算力</text>
+<text x="624" y="327" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调大：每轮可处理更多序列</text>
+<text x="624" y="359" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能提高吞吐，也可能增加内存与延迟</text>
+<rect x="44" y="425" width="1112" height="270" rx="18" fill="white"/>
+<text x="70" y="465" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">02  一轮处理多少份文字</text>
+<text x="1126" y="465" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">max_num_batched_tokens</text>
+<text x="70" y="503" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像厨房这一轮最多处理多少工作量</text>
+<rect x="68" y="523" width="512" height="148" rx="18" fill="#eff1fb"/>
+<rect x="600" y="523" width="532" height="148" rx="18" fill="#e9f5f3"/>
+<rect x="92" y="539" width="33" height="44" rx="9" fill="#7158bb"/>
+<rect x="134" y="539" width="33" height="44" rx="9" fill="#7158bb"/>
+<rect x="176" y="539" width="33" height="44" rx="9" fill="#7158bb"/>
+<rect x="218" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="260" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="302" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="344" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="386" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="428" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="470" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<rect x="624" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="666" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="708" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="750" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="792" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="834" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="876" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="918" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="960" y="539" width="33" height="44" rx="9" fill="#087f8c"/>
+<rect x="1002" y="539" width="33" height="44" rx="9" fill="#e6ebf2"/>
+<text x="92" y="617" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调小：每轮 token 预算较少</text>
+<text x="92" y="649" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">长输入可能分更多轮；效果取决于负载</text>
+<text x="624" y="617" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调大：每轮 token 预算较多</text>
+<text x="624" y="649" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能提高输入处理效率，也可能拖慢输出</text>
+<rect x="44" y="715" width="1112" height="270" rx="18" fill="white"/>
+<text x="70" y="755" font-size="27" fill="#17324d" font-weight="700" text-anchor="start">03  给实例多少设备内存预算</text>
+<text x="1126" y="755" font-size="22" fill="#2463b5" font-weight="400" text-anchor="end" class="code">gpu_memory_utilization</text>
+<text x="70" y="793" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">像为服务划出仓库预算，不是算力利用率</text>
+<rect x="68" y="813" width="512" height="148" rx="18" fill="#eff1fb"/>
+<rect x="600" y="813" width="532" height="148" rx="18" fill="#e9f5f3"/>
+<rect x="92" y="831" width="430" height="40" rx="9" fill="#dce4ed"/>
+<rect x="92" y="831" width="258.0" height="40" rx="9" fill="#7158bb"/>
+<text x="110" y="858" font-size="19" fill="white" font-weight="600" text-anchor="start">本实例预算</text>
+<rect x="624" y="831" width="430" height="40" rx="9" fill="#dce4ed"/>
+<rect x="624" y="831" width="365.5" height="40" rx="9" fill="#087f8c"/>
+<text x="642" y="858" font-size="19" fill="white" font-weight="600" text-anchor="start">本实例预算</text>
+<text x="92" y="907" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调小：留给其他开销的空间较多</text>
+<text x="92" y="939" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">KV 缓存容量可能减少，更容易排队</text>
+<text x="624" y="907" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">调大：本实例可用内存预算较多</text>
+<text x="624" y="939" font-size="21" fill="#17324d" font-weight="400" text-anchor="start">可能容纳更多 KV，但余量少、易内存不足</text>
+<rect x="44" y="1025" width="1112" height="103" rx="18" fill="#fff1df"/>
+<text x="70" y="1063" font-size="25" fill="#9b6314" font-weight="700" text-anchor="start">上下文长度是服务能力约定，不能为了成绩随意缩短</text>
+<text x="70" y="1100" font-size="20" fill="#52677a" font-weight="400" text-anchor="start">max_model_len 在模板中固定；序列名额 ≠ 外部并发用户数。图形仅示意，不按数值比例。</text>
+</svg>

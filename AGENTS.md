@@ -13,6 +13,10 @@ This project does not currently port either project's accelerator engine.
 ## Start here
 
 - Read `README.md` for commands and supported scope.
+- Read `docs/tuning-explained.md` and `docs/quickstart.md` for the beginner-facing
+  explanation and reproduction path. Keep their capability claims aligned with
+  the actual example profiles. Regenerate `docs/assets/*.svg` with
+  `python3 scripts/render_docs_diagrams.py` when changing illustrated behavior.
 - Read `docs/rsi.md` for Agent actions, promotion, memory, budgets and recovery.
 - Read `docs/guide.md` for the underlying contracts, execution and test adapters.
 - Read `docs/architecture.md` for module boundaries and audit invariants.
