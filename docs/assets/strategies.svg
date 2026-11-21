@@ -82,5 +82,5 @@
 <text x="638" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">两卡仅作示意；实际并行数可以调整。</text>
 <text x="638" y="947" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">卡数更多不保证更快，须满足明确约束。</text>
 <rect x="44" y="1005" width="1112" height="43" rx="12" fill="#e9eef5"/>
-<text x="600" y="1034" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">无需先手工批准 profile；实际版本、模型资产与试运行结果决定可用性。</text>
+<text x="600" y="1034" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">无需预先批准 profile；每轮先核查文档与代码，再由实测验证可用性。</text>
 </svg>

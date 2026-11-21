@@ -1,48 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1250" viewBox="0 0 1200 1250" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1424" viewBox="0 0 1200 1424" role="img" aria-labelledby="title desc">
 <title id="title">自然语言驱动的开放推理调优</title>
-<desc id="desc">用户先写明想优化什么和哪些条件不能改变。系统生成评分目标与显式约束，未提的推理项开放。Agent分析实测反馈、查询Wiki、提出完整候选，并启动服务测试。候选通过独立ABA复核并提升足够后晋升；启动失败等结果也反馈到下一轮。</desc>
+<desc id="desc">用户先写明想优化什么和哪些条件不能改变。系统生成评分目标与显式约束，未提的推理项开放。大模型分析实测反馈、查询资料、提出完整候选。候选通过结构与客户条件检查后，必须经MCP或A2A到MCP核查文档与源码，再由大模型审查具体改动，获准后才能启动测试。独立ABA复核通过且提升足够后晋升；初始参照不合格时，候选三次独立启动全部达标可建立合格基线。失败和证据不足也反馈到下一轮。</desc>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#60768c"/></marker></defs>
 <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei","PingFang SC",sans-serif} .code{font-family:"DejaVu Sans Mono",monospace}</style>
-<rect x="0" y="0" width="1200" height="1250" rx="0" fill="#f4f7fb"/>
+<rect x="0" y="0" width="1200" height="1424" rx="0" fill="#f4f7fb"/>
 <text x="44" y="60" font-size="35" fill="#17324d" font-weight="700" text-anchor="start">说需求，让 Agent 用实测寻找更好的配置</text>
-<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">autotune：诊断问题、查资料、改参数、跑实验；失败也能帮助下一轮判断。</text>
+<text x="44" y="100" font-size="22" fill="#52677a" font-weight="400" text-anchor="start">autotune：大模型分析与提案，核查文档和源码，审查通过后再实验。</text>
 <rect x="44" y="132" width="1112" height="105" rx="18" fill="#e6effb"/>
 <text x="70" y="173" font-size="27" fill="#2463b5" font-weight="700" text-anchor="start">你的文字需求 → 正式评分目标 + 明确限制</text>
 <text x="70" y="211" font-size="22" fill="#17324d" font-weight="400" text-anchor="start">只有写明的条件才锁住；没有提出的质量、延迟或精度要求，不自动补上默认门槛。</text>
 <path d="M600 238 L600 269" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <rect x="230" y="282" width="740" height="139" rx="18" fill="#edf0fb"/>
-<text x="258" y="322" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">1  先分析，再查询 Wiki</text>
-<text x="258" y="361" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">读取当前成绩和失败原因，提出瓶颈假设。</text>
-<text x="258" y="393" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">通过 DeepWiki MCP 查询实际版本下的推理方法。</text>
+<text x="258" y="322" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">1  先分析，再查询资料</text>
+<text x="258" y="361" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">大模型读取当前成绩和失败原因，提出瓶颈假设。</text>
+<text x="258" y="393" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">通过 DeepWiki 研究实际版本下的推理方法。</text>
 <rect x="230" y="456" width="740" height="139" rx="18" fill="#e8f5f5"/>
 <text x="258" y="496" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">2  提出完整候选配置</text>
-<text x="258" y="535" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">从本机 vLLM 帮助发现参数，可改变开关和嵌套 JSON。</text>
-<text x="258" y="567" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">不要求预先列候选值，也不依赖已批准 profile 目录。</text>
-<rect x="230" y="630" width="740" height="139" rx="18" fill="#edf0fb"/>
-<text x="258" y="670" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">3  真正启动，真正测量</text>
-<text x="258" y="709" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">按候选配置启动被测服务，固定评测器记录结果。</text>
-<text x="258" y="741" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">启动失败、内存不足、参数不兼容也留下反馈。</text>
-<rect x="230" y="804" width="740" height="139" rx="18" fill="#eaf1fb"/>
-<text x="258" y="844" font-size="27" fill="#2463b5" font-weight="700" text-anchor="start">4  独立复核，再决定是否保留</text>
-<text x="258" y="883" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">满足用户明确约束后，比较当前配置 → 候选 → 当前配置。</text>
-<text x="258" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">ABA 复核检查环境波动和提升，不只看一次最好成绩。</text>
+<text x="258" y="535" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">本机能力目录提供可用参数，可提议开关和嵌套 JSON。</text>
+<text x="258" y="567" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">先检查结构、资源与客户明确条件，不要求预批准 profile。</text>
+<rect x="230" y="630" width="740" height="139" rx="18" fill="#e8f5f5"/>
+<text x="258" y="670" font-size="27" fill="#087f8c" font-weight="700" text-anchor="start">3  查文档与源码，大模型审查</text>
+<text x="258" y="709" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">通过 MCP 或 A2A→MCP 核查本轮具体改动。</text>
+<text x="258" y="741" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">来源不全、兼容性未明或预算不足，不执行该候选。</text>
+<rect x="230" y="804" width="740" height="139" rx="18" fill="#edf0fb"/>
+<text x="258" y="844" font-size="27" fill="#7158bb" font-weight="700" text-anchor="start">4  审查通过后，真正启动测量</text>
+<text x="258" y="883" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">按候选配置启动被测服务，固定评测器记录结果。</text>
+<text x="258" y="915" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">启动失败、内存不足、参数不兼容也留下反馈。</text>
+<rect x="230" y="978" width="740" height="139" rx="18" fill="#eaf1fb"/>
+<text x="258" y="1018" font-size="27" fill="#2463b5" font-weight="700" text-anchor="start">5  独立复核，再决定是否保留</text>
+<text x="258" y="1057" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">有合格参照时，ABA 复核检查环境波动和总体提升。</text>
+<text x="258" y="1089" font-size="21" fill="#52677a" font-weight="400" text-anchor="start">初始参照不合格时，候选三次独立启动须全部达标。</text>
 <path d="M600 422 L600 449" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M600 596 L600 623" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <path d="M600 770 L600 797" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M460 944 L460 976 L305 976 L305 1000" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M740 944 L740 976 L895 976 L895 1000" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<rect x="70" y="1010" width="470" height="113" rx="18" fill="#e5f3ea"/>
-<text x="305" y="1049" font-size="25" fill="#267247" font-weight="700" text-anchor="middle">满足约束，且提升足够</text>
-<text x="305" y="1087" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">晋升为新冠军，作为下一轮参照</text>
-<rect x="660" y="1010" width="470" height="113" rx="18" fill="#fff0df"/>
-<text x="895" y="1049" font-size="25" fill="#9b6314" font-weight="700" text-anchor="middle">失败 / 未提升 / 证据不足</text>
-<text x="895" y="1087" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">保留原配置，带着原因继续分析</text>
-<path d="M70 1065 L44 1065 L44 351 L220 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
-<path d="M1130 1065 L1156 1065 L1156 351 L980 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
-<rect x="69" y="694" width="133" height="38" rx="19" fill="#eef1f6"/>
-<text x="135.5" y="720" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">结果反馈</text>
-<rect x="995" y="694" width="133" height="38" rx="19" fill="#eef1f6"/>
-<text x="1061.5" y="720" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">结果反馈</text>
-<rect x="44" y="1154" width="1112" height="65" rx="18" fill="white"/>
-<text x="600" y="1194" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">到达预算就结束 · 实际资产与引擎决定能否运行 · 不改评分脚本，不把模拟数字当实测</text>
+<path d="M600 944 L600 971" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M460 1118 L460 1150 L305 1150 L305 1174" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M740 1118 L740 1150 L895 1150 L895 1174" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="70" y="1184" width="470" height="113" rx="18" fill="#e5f3ea"/>
+<text x="305" y="1223" font-size="25" fill="#267247" font-weight="700" text-anchor="middle">达标且提升 / 建立合格基线</text>
+<text x="305" y="1261" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">按复核规则保留，作为下一轮参照</text>
+<rect x="660" y="1184" width="470" height="113" rx="18" fill="#fff0df"/>
+<text x="895" y="1223" font-size="25" fill="#9b6314" font-weight="700" text-anchor="middle">失败 / 未提升 / 证据不足</text>
+<text x="895" y="1261" font-size="22" fill="#17324d" font-weight="400" text-anchor="middle">保留原配置，带着原因继续分析</text>
+<path d="M70 1239 L44 1239 L44 351 L220 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
+<path d="M1130 1239 L1156 1239 L1156 351 L980 351" fill="none" stroke="#60768c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="7 7"/>
+<rect x="69" y="868" width="133" height="38" rx="19" fill="#eef1f6"/>
+<text x="135.5" y="894" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">结果反馈</text>
+<rect x="995" y="868" width="133" height="38" rx="19" fill="#eef1f6"/>
+<text x="1061.5" y="894" font-size="20" fill="#52677a" font-weight="600" text-anchor="middle">结果反馈</text>
+<rect x="44" y="1328" width="1112" height="65" rx="18" fill="white"/>
+<text x="600" y="1368" font-size="21" fill="#52677a" font-weight="400" text-anchor="middle">到达预算就结束 · 源码核查不能代替现场实测 · 不改评分脚本，不把模拟数字当实测</text>
 </svg>
