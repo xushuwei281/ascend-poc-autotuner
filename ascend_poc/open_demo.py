@@ -116,7 +116,7 @@ def make_runtime(inputs: Path, serving_port: int, fixture_port: int):
                 'max_retries': 0},
         'research': {'endpoint': f'http://127.0.0.1:{fixture_port}/mcp',
                      'repository': 'vllm-project/vllm-ascend', 'timeout_s': 10,
-                     'max_calls': 4, 'on_error': 'stop'},
+                     'max_calls': 6, 'on_error': 'stop'},
         'budget': {'max_experiments': 3, 'max_wall_time_s': 120, 'max_llm_calls': 10,
                    'repetitions': 1, 'final_repetitions': 2},
         'verification': {'mode': 'aba', 'max_baseline_drift': .05,
@@ -189,6 +189,13 @@ def run_open_demo(output: Path) -> dict:
                         'evidence_ids': evidence,
                     }
                     type(self).proposal_index += 1
+                elif stage == 'review_candidate':
+                    decision = {
+                        'decision': 'run', 'reason': 'SYNTHETIC source-review fixture only; not real compatibility evidence.',
+                        'checked_changes': [change['path'] for change in payload['changes']],
+                        'sources': payload['evidence']['sources'], 'uncertainties': [],
+                        'evidence_id': payload['evidence']['id'],
+                    }
                 else:
                     self.send_error(400)
                     return
@@ -216,7 +223,9 @@ def run_open_demo(output: Path) -> dict:
                     'SYNTHETIC research fixture, not hardware advice. Prefix caching requires repeated '
                     'token prefixes; compilation and parallel layouts must be validated on the installed '
                     'stack. Higher load may increase throughput while breaking a latency gate. '
-                    'Reference repository: https://deepwiki.com/vllm-project/vllm-ascend'}]}
+                    'Fixture source labels (not fetched or verified): '
+                    'https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/graph_mode.html '
+                    'https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/envs.py'}]}
             else:
                 self.send_json({'jsonrpc': '2.0', 'id': body.get('id'),
                                 'error': {'code': -32601, 'message': 'Unknown synthetic fixture method'}})

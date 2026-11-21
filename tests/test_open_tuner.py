@@ -9,6 +9,8 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from ascend_poc.deepwiki import DeepWikiError
+from ascend_poc.a2a import A2AError
+from ascend_poc.rsi_config import digest
 from ascend_poc.open_demo import REQUEST, demo_candidate, demo_intent, make_runtime
 from ascend_poc.open_mock import synthetic_metrics
 from ascend_poc.open_runtime import validate_runtime
@@ -38,6 +40,11 @@ class ScriptedModel:
             return {'candidate': self.candidates.pop(0), 'hypothesis': 'A different configuration may improve the score.',
                     'expected_effect': 'Measure the objective and every explicitly requested gate.',
                     'evidence_ids': payload['evidence_ids']}
+        if stage == 'review_candidate':
+            return {'decision': 'run', 'reason': 'Synthetic fixture review of exact changes.',
+                    'checked_changes': [change['path'] for change in payload['changes']],
+                    'sources': payload['evidence']['sources'], 'uncertainties': [],
+                    'evidence_id': payload['evidence']['id']}
         raise AssertionError('Unexpected model stage: ' + str(stage))
 
 
@@ -51,7 +58,8 @@ class Research:
         if self.fail:
             raise DeepWikiError('Synthetic research service unavailable')
         return {'answer': 'Synthetic evidence: test supported cache and compilation options.',
-                'sources': ['https://deepwiki.com/vllm-project/vllm-ascend'],
+                'sources': ['https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/graph_mode.html',
+                            'https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/envs.py'],
                 'repository': repository, 'transport': 'mcp', 'tool': 'ask_wiki_question', 'truncated': False}
 
 
@@ -203,8 +211,8 @@ class OpenTunerTests(TestCase):
         deadline = state['deadline_epoch']
         resumed, next_model, _, _ = self.run_campaign(resume=True)
         self.assertEqual(resumed['deadline_epoch'], deadline)
-        self.assertEqual(resumed['counters']['llm_calls'], 3)
-        self.assertEqual([p['stage'] for p in next_model.payloads], ['diagnose', 'propose'])
+        self.assertEqual(resumed['counters']['llm_calls'], 4)
+        self.assertEqual([p['stage'] for p in next_model.payloads], ['diagnose', 'propose', 'review_candidate'])
         self.assertEqual(resumed['generation'], 1)
 
     def test_explicit_user_parameter_lock_rejects_proposal_then_allows_correction(self):
@@ -244,14 +252,13 @@ class OpenTunerTests(TestCase):
 
     def test_wiki_failure_continue_is_explicit_and_never_fabricates_evidence(self):
         self.raw['research']['on_error'] = 'continue'
-        state, model, _, _ = self.run_campaign(researcher=Research(fail=True))
+        state, model, runner, _ = self.run_campaign(researcher=Research(fail=True))
         item = state['experiments'][0]
         self.assertEqual(item['research_status'], 'failed')
-        self.assertEqual(item['evidence_ids'], [])
-        self.assertEqual(item['status'], 'promoted')
-        payload = next(p for p in model.payloads if p['stage'] == 'propose')
-        self.assertIsNone(payload['evidence'])
-        self.assertEqual(payload['evidence_ids'], [])
+        self.assertEqual(item['status'], 'research_unavailable')
+        self.assertEqual(len(runner.calls), 1)
+        self.assertNotIn('propose', [p['stage'] for p in model.payloads])
+        self.assertIsNone(state['champion'])
 
     def test_unknown_parameter_error_is_feedback_and_later_valid_configuration_runs(self):
         self.raw['budget']['max_experiments'] = 2
@@ -329,3 +336,100 @@ class OpenTunerTests(TestCase):
         self.assertNotEqual(saved['experiments'][0]['status'], 'proposal_failed')
         self.assertFalse((self.output / 'champion.json').exists())
         self.assertFalse((self.output / 'champion-contract.json').exists())
+
+    def test_specific_candidate_sources_are_checked_before_measurement(self):
+        state, model, runner, researcher = self.run_campaign()
+        item = state['experiments'][0]
+        self.assertEqual(len(researcher.calls), 2)
+        self.assertEqual([p['stage'] for p in model.payloads],
+                         ['compile_intent', 'diagnose', 'propose', 'review_candidate'])
+        review_payload = next(p for p in model.payloads if p['stage'] == 'review_candidate')
+        self.assertEqual(review_payload['candidate'], item['candidate'])
+        self.assertEqual(item['source_review']['candidate_hash'], digest(item['candidate']))
+        self.assertEqual(item['source_review']['reference_hash'], digest(item['review_reference_candidate']))
+        self.assertEqual(item['source_review']['evidence_id'], item['review_evidence_id'])
+        self.assertIn('source_review', (self.output / 'report.md').read_text())
+        self.assertEqual(len(runner.calls), 5)
+
+    def test_candidate_research_failure_never_executes_unreviewed_candidate(self):
+        class SecondCallFails(Research):
+            def ask(self, repository, question, remaining_s=None):
+                if self.calls:
+                    raise A2AError('Synthetic A2A transport failure')
+                return super().ask(repository, question, remaining_s)
+        state, model, runner, _ = self.run_campaign(researcher=SecondCallFails())
+        self.assertEqual(state['experiments'][0]['status'], 'source_review_unavailable')
+        self.assertEqual(len(runner.calls), 1)
+        self.assertNotIn('review_candidate', [p['stage'] for p in model.payloads])
+        self.assertIsNone(state['champion'])
+
+    def test_llm_rejection_is_feedback_and_cannot_change_candidate(self):
+        class RejectingModel(ScriptedModel):
+            def ask(self, system, payload, remaining_s):
+                value = super().ask(system, payload, remaining_s)
+                if payload['stage'] == 'review_candidate':
+                    value.update(decision='reject', reason='The documented interaction defeats this customer goal.')
+                return value
+        state, _, runner, _ = self.run_campaign(model=RejectingModel([demo_candidate(0)]))
+        item = state['experiments'][0]
+        self.assertEqual(item['status'], 'source_review_reject')
+        self.assertEqual(item['candidate'], demo_candidate(0))
+        self.assertEqual(len(runner.calls), 1)
+        self.assertIsNone(state['champion'])
+
+    def test_source_review_cannot_add_revised_candidate_or_omit_changed_fields(self):
+        for defect in ('rewrite', 'missing_change', 'new_source'):
+            with self.subTest(defect=defect):
+                class InvalidReview(ScriptedModel):
+                    def ask(self, system, payload, remaining_s):
+                        value = super().ask(system, payload, remaining_s)
+                        if payload['stage'] == 'review_candidate':
+                            if defect == 'rewrite':
+                                value['candidate'] = demo_candidate(2)
+                            elif defect == 'missing_change':
+                                value['checked_changes'] = []
+                            else:
+                                value['sources'].append('https://example.com/invented')
+                        return value
+                state, _, runner, _ = self.run_campaign(
+                    model=InvalidReview([demo_candidate(0)]), output=self.root / defect)
+                self.assertEqual(state['experiments'][0]['status'], 'proposal_failed')
+                self.assertEqual(len(runner.calls), 1)
+                self.assertIsNone(state['champion'])
+
+    def test_insufficient_review_budget_stops_before_partial_round(self):
+        for key in ('llm', 'research'):
+            with self.subTest(key=key):
+                self.raw = make_runtime(self.inputs, 19876, 19877)
+                self.raw['budget']['max_experiments'] = 1
+                if key == 'llm':
+                    self.raw['budget']['max_llm_calls'] = 3  # compile + only two, not three, calls
+                else:
+                    self.raw['research']['max_calls'] = 1
+                state, model, runner, researcher = self.run_campaign(output=self.root / key)
+                self.assertEqual(state['experiments'], [])
+                self.assertEqual(len(runner.calls), 1)  # operator's initial recipe only
+                self.assertEqual(researcher.calls, [])
+                self.assertEqual([p['stage'] for p in model.payloads], ['compile_intent'])
+                self.assertIn('budget', state['stop_reason'])
+
+    def test_saved_source_review_binding_cannot_be_reassigned(self):
+        from ascend_poc.open_tuner import _persist
+        state, _, _, _ = self.run_campaign()
+        item = state['experiments'][0]
+        item['source_review']['candidate_hash'] = digest(demo_candidate(2))
+        # Even a new valid journal checkpoint cannot bless a mismatched review.
+        _persist(self.output, state, 'test_rebound_review')
+        with self.assertRaisesRegex(ValueError, 'source review'):
+            report_autotune(self.output)
+        self.assertFalse((self.output / 'champion.json').exists())
+
+    def test_open_mode_selects_existing_a2a_client(self):
+        self.raw['research'].update(transport='a2a', endpoint='http://127.0.0.1:8766/a2a')
+        researcher = Research()
+        with patch('ascend_poc.open_research.A2AResearchClient', return_value=researcher) as factory:
+            state = run_autotune(self.runtime(), REQUEST, self.output, workdir=Path.cwd(),
+                                 client=ScriptedModel([demo_candidate(0)]), trial_runner=Measurements())
+        factory.assert_called_once_with('http://127.0.0.1:8766/a2a', timeout_s=10)
+        self.assertEqual(state['experiments'][0]['source_review']['decision'], 'run')
+        self.assertEqual(len(researcher.calls), 2)

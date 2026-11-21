@@ -61,6 +61,14 @@ Paths in the table are under `ascend_poc/`.
   Model asset precision metadata does not prove runtime compute or KV precision;
   compile explicit requirements into the appropriate engine locks, or mark
   ambiguous requests unresolved.
+- The LLM owns open-mode diagnosis, parameter/strategy choices and technical synthesis.
+  Do not substitute a numerical optimizer or fixed strategy sequence for this role.
+  Every changed candidate needs a fresh MCP or A2A-to-MCP query of vLLM-Ascend
+  documentation and implementation code, followed by LLM review of the exact diff.
+  Bind source evidence and review to candidate/reference hashes; a revised candidate
+  needs a new review. Missing evidence, unresolved compatibility, or exhausted
+  review budgets must not execute that candidate, including on_error=continue.
+  Source review permits an experiment, never substitutes for real measurement.
 - In legacy modes, preserve the original fixed workload, precision/quality rules
   and hard gates across candidates. Do not change historical evidence semantics.
 - Keep the evaluator and metric definitions fixed in all modes. Open-mode changes

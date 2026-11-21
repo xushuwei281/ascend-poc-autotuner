@@ -18,6 +18,9 @@ def runtime():
                        {'id': 'other', 'path': '/PRIVATE/other', 'family': 'other', 'precision': 'bf16'}],
             'baseline': {'model': 'demo-bf16', 'engine': {'tensor-parallel-size': 2},
                          'env': {}, 'workload': {'output_len': 256}},
+            'workload_parameters': {'output_len': {'type': 'integer', 'minimum': 1,
+                                                  'description': 'Output token count'}},
+            'discovery': {'env_names': ['HCCL_BUFFSIZE', 'SOME_FEATURE']},
             'requirements': {'quality_score': {'min': 0.999}},
             'llm': {'api_key': 'PRIVATE-KEY'}, 'command': ['PRIVATE-COMMAND']}
 
@@ -77,6 +80,66 @@ class IntentTests(unittest.TestCase):
         for value in cases:
             with self.subTest(value=value), self.assertRaises(ValueError):
                 validate_intent(value, TEXT, runtime())
+
+    def test_compiler_can_map_customer_concurrency_to_actual_adapter_field(self):
+        resources = runtime()
+        resources['workload_parameters'] = {
+            'num_clients': {'type': 'integer', 'minimum': 1,
+                            'description': 'Number of concurrent benchmark clients'}}
+        caps = {'flags': {'max-num-seqs': {'kind': 'value', 'metavar': 'N',
+                                          'help': 'Maximum concurrent engine sequences'}},
+                'excluded': {'port': {'reason': 'controller connection'}}}
+        text = TEXT + ' 并发固定为 32。'
+
+        class Client:
+            def ask(self, system, payload, remaining_s):
+                self.payload = payload
+                result = intent()
+                key = next(name for name, spec in payload['workload_parameters'].items()
+                           if 'concurrent benchmark clients' in spec['description'])
+                result['constraints'].append(dict(scope='workload', key=key, operator='eq',
+                                                  value=32, source_quote='并发固定为 32'))
+                return result
+
+        client = Client()
+        result = compile_intent(text, resources, client, 10, caps=caps)
+        self.assertEqual(result['unresolved'], [])
+        self.assertEqual(result['constraints'][-1], dict(scope='workload', key='num_clients',
+                         operator='eq', value=32, source_quote='并发固定为 32'))
+        self.assertEqual(client.payload['workload_parameters'], resources['workload_parameters'])
+        self.assertEqual(client.payload['environment_names'], ['HCCL_BUFFSIZE', 'SOME_FEATURE'])
+        self.assertEqual(client.payload['engine_capabilities']['max-num-seqs']['metavar'], 'N')
+        self.assertNotIn('port', client.payload['engine_capabilities'])
+        self.assertNotIn('baseline', client.payload)
+        self.assertNotIn('PRIVATE', json.dumps(client.payload))
+        self.assertEqual(result['metric_requirements'], intent()['metric_requirements'])
+
+    def test_unconnected_parameter_locks_are_unresolved_before_candidate_search(self):
+        resources = runtime()
+        resources['workload_parameters'] = {'num_clients': {'type': 'integer', 'minimum': 1}}
+        caps = {'flags': {'max-num-seqs': {'kind': 'value'}}}
+        text = TEXT + ' 并发固定为 32；任务队列必须为 1；批大小固定为 32。'
+        for scope, key, number, quote in [
+            ('workload', 'concurrency', 32, '并发固定为 32'),
+            ('env', 'TASK_QUEUE_ENABLE', 1, '任务队列必须为 1'),
+            ('engine', 'max-batch-size', 32, '批大小固定为 32'),
+        ]:
+            value = intent()
+            condition = dict(scope=scope, key=key, operator='eq', value=number, source_quote=quote)
+            value['constraints'].append(condition)
+            with self.subTest(scope=scope):
+                result = validate_intent(value, text, resources, caps=caps)
+                self.assertEqual(result['constraints'][-1], condition)
+                self.assertTrue(any(f'{scope}.{key}' in issue for issue in result['unresolved']))
+                self.assertTrue(any('unresolved' in failure for failure in
+                                    check_candidate(result, candidate(), resources)))
+                self.assertEqual(value['unresolved'], [])
+
+    def test_available_catalog_does_not_create_customer_locks(self):
+        resources = runtime()
+        caps = {'flags': {'max-num-seqs': {'kind': 'value'}, 'dtype': {'kind': 'value'}}}
+        result = validate_intent(intent(), TEXT, resources, caps=caps)
+        self.assertEqual(result, intent())
 
     def test_unknown_connected_metric_blocks_execution_instead_of_inventing_adapter(self):
         value = intent(); value['objective']['metric'] = 'new_score'

@@ -21,7 +21,7 @@ class OpenWireDemoTests(TestCase):
             state = run_open_demo(output)
             self.assertEqual(state['status'], 'completed')
             self.assertEqual(state['generation'], 2)
-            self.assertEqual(state['counters'], {'llm_calls': 7, 'research_calls': 3})
+            self.assertEqual(state['counters'], {'llm_calls': 10, 'research_calls': 6})
             self.assertEqual(os.environ['POC_OPEN_DEMO_KEY'], 'existing-value-must-be-restored')
             self.assertEqual(state['intent']['metric_requirements'], {'p99_tpot_ms': {'max': 50}})
 

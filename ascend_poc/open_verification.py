@@ -1,8 +1,9 @@
 """Independent ABA comparisons for arbitrary finite open-mode score metrics.
 
-Strictly positive scenario medians use the existing ratio protocol unchanged.
-If any measured objective median is zero or negative, use direction-adjusted
-absolute differences divided by ``max(abs(A_before), abs(A_after), 1.0)``.
+Promotion follows the customer-selected scenario aggregation, while explicit
+scenario gates and independent baseline drift checks still apply to every scene.
+Strictly positive scenario medians use relative ratios. If any measured objective
+median is zero or negative, use direction-adjusted absolute differences divided by ``max(abs(A_before), abs(A_after), 1.0)``.
 The floor of one is one unit of the objective metric, not a statistical confidence
 claim or a hidden customer gate. In this mode the configured improvement bar is
 a normalized-difference threshold, never a relative percentage or a speedup.
@@ -94,6 +95,30 @@ def _evaluate_open_aba(contract, before, candidate, after, settings):
                                      for checked in (checked_before, checked_after) for name in names)
         if all_reference_positive and (candidate_errors or all(
                 checked_candidate['scenario_objectives'][name] > 0 for name in names)):
+            if not legacy['accepted']:
+                return legacy
+            # Reuse all completeness, per-repetition gates and per-scene drift
+            # checks, but do not substitute "every scene improves" for the
+            # customer's min/mean/max objective. These are independently
+            # aggregated start scores, not an aggregation of relative gains.
+            comparison = _objective_comparison(contract, checked_before,
+                                               checked_candidate, checked_after)
+            baseline, score = comparison['baseline'], comparison['candidate']
+            ratio = score / baseline if direction == 'maximize' else baseline / score
+            if not _finite(ratio):
+                legacy.update(verdict='INVALID', valid=False, accepted=False, improved=False,
+                              reasons=['aggregate objective relative comparison overflowed'])
+                return legacy
+            improvement = ratio - 1
+            comparison.update(speedup=ratio, relative_improvement=improvement)
+            bar = legacy['required_improvement']
+            improved = improvement > bar and not math.isclose(improvement, bar, rel_tol=1e-12, abs_tol=1e-12)
+            legacy.update(relative_improvement=improvement, improved=improved,
+                          objective_comparison=comparison, reasons=[])
+            if not improved:
+                legacy['reasons'].append(
+                    'customer gates passed; aggregate objective improvement did not exceed '
+                    'the conservative comparison bar')
             return legacy
 
         for name in names:
@@ -111,7 +136,15 @@ def _evaluate_open_aba(contract, before, candidate, after, settings):
                 'comparison_scale': scale, 'absolute_improvement': None,
                 'normalized_improvement': None,
             }
-        maximum_drift = max(row['baseline_drift'] for row in result['scenarios'].values())
+        comparison = _objective_comparison(contract, checked_before, None, checked_after)
+        scale = max(abs(comparison['before']), abs(comparison['after']), 1.0)
+        objective_drift = abs(comparison['before'] / scale - comparison['after'] / scale)
+        comparison.update(comparison_scale=scale, baseline_drift=objective_drift,
+                          absolute_improvement=None, normalized_improvement=None,
+                          relative_improvement=None, speedup=None)
+        result['objective_comparison'] = comparison
+        maximum_drift = max(objective_drift,
+                            max(row['baseline_drift'] for row in result['scenarios'].values()))
         bar = max(thresholds['min_relative_improvement'], thresholds['drift_multiplier'] * maximum_drift)
         if not _finite(bar):
             result['reasons'].append('normalized improvement threshold overflowed')
@@ -135,7 +168,14 @@ def _evaluate_open_aba(contract, before, candidate, after, settings):
                        normalized_improvement=normalized)
         if result['reasons']:
             return result
-        improvement = min(row['normalized_improvement'] for row in result['scenarios'].values())
+        score = checked_candidate['objective']
+        absolute = sign * (score - comparison['baseline'])
+        improvement = absolute / comparison['comparison_scale']
+        if not _finite(score) or not _finite(absolute) or not _finite(improvement):
+            result['reasons'].append('aggregate objective absolute comparison overflowed')
+            return result
+        comparison.update(candidate=score, absolute_improvement=absolute,
+                          normalized_improvement=improvement)
         result.update(valid=True, normalized_improvement=improvement)
         if not checked_candidate['feasible']:
             result.update(verdict='REJECTED', reasons=list(checked_candidate['failures']))
@@ -150,3 +190,14 @@ def _evaluate_open_aba(contract, before, candidate, after, settings):
         result.update(verdict='INVALID', valid=False, accepted=False, improved=False,
                       reasons=['malformed verification input or invalid absolute comparison'])
     return result
+
+def _objective_comparison(contract, before, candidate, after):
+    """Describe the same aggregate score used by exploration and reporting."""
+    a, b = before['objective'], after['objective']
+    c = None if candidate is None else candidate['objective']
+    if not _finite(a) or not _finite(b) or candidate is not None and not _finite(c):
+        raise ValueError('Aggregate objective must be finite')
+    return {'metric': contract['objective']['metric'],
+            'direction': contract['objective']['direction'],
+            'scenario_aggregation': contract['objective'].get('scenario_aggregation', 'min'),
+            'before': a, 'after': b, 'baseline': a / 2 + b / 2, 'candidate': c}

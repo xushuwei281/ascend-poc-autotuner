@@ -69,6 +69,24 @@ def intent():
 
 
 class OpenRuntimeTests(unittest.TestCase):
+    def test_research_transport_selects_only_existing_mcp_or_a2a(self):
+        for transport, endpoint in (
+            ('mcp', 'https://mcp.deepwiki.com/mcp'),
+            ('a2a', 'http://127.0.0.1:8766/a2a'),
+        ):
+            with self.subTest(transport=transport):
+                raw = fixture()
+                raw['research'] = {'transport': transport}
+                configured = validate_runtime(raw)['research']
+                self.assertEqual(configured['transport'], transport)
+                self.assertEqual(configured['endpoint'], endpoint)
+        for invalid in ('unknown', [], None):
+            with self.subTest(invalid=invalid):
+                raw = fixture()
+                raw['research'] = {'transport': invalid}
+                with self.assertRaisesRegex(ValueError, 'research.transport'):
+                    validate_runtime(raw)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
