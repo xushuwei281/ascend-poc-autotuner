@@ -538,7 +538,8 @@ def run_autotune(runtime, request_text, output, *, workdir=None, plan_only=False
                 raise LLMError('Planning budget exhausted')
             state['counters']['llm_calls'] += 1
             _persist(output, state, 'llm_call_reserved')
-            return client.ask(system, payload, remaining())
+            # Provider adapters receive snapshots, never mutable authoritative state.
+            return client.ask(system, copy.deepcopy(payload), remaining())
 
         class CountedClient:
             def ask(self, system, payload, remaining_s):
