@@ -245,7 +245,7 @@ python3 -m ascend_poc research-agent --port 8766 \
 
 工作流改为 `{"transport":"a2a","endpoint":"http://127.0.0.1:8766/a2a"}`。桥接提供 `/.well-known/agent-card.json`，实现固定版本 A2A 0.3.0 的同步 JSON-RPC 研究子集，再调用 DeepWiki MCP；它不是完整 A2A 平台。仅监听回环地址，没有公网认证、多租户或分布式任务调度。
 
-研究失败或次数耗尽且 `on_error: "stop"` 时停止继续搜索，仍尝试确认已测可行候选；`continue` 允许在缺少新研究证据时继续受限搜索。报告会保留失败原因，不能将后者解释为已有来源支持。
+旧 `workflow` 研究失败或次数耗尽且 `on_error: "stop"` 时停止继续搜索，仍尝试确认已测可行候选；`continue` 允许在缺少新研究证据时继续受限搜索。报告会保留失败原因，不能将后者解释为已有来源支持。此行为不适用于开放 `autotune`：新模式必须完成具体候选的文档／源码研究和 LLM 复审，`continue` 也不能执行缺少复审证据的候选。
 
 ## 5. 大模型 API 与提案格式
 
@@ -489,7 +489,7 @@ python3 -m ascend_poc report --output runs/customer-poc
 
 恢复要求相同配置、工作目录、运行指纹、文件与有效事件链；沿用原始绝对截止时间，暂停时间也消耗预算。ABA 中断后不拼接不完整对照组，恢复时重新执行该组。修改测试、版本或数据后新开实验目录。
 
-`report` 自动识别 workflow 或旧 tune 产物，根据保存快照重建 Markdown，不调用模型、研究服务或硬件。工作流会核对快照指纹、事件链和 checkpoint；`integrity_valid: false` 时拒绝整份重建，原始失败证据仍保留。旧 `tune` 仅校验契约指纹，没有相同的状态/事件链保护。此命令不重新验证今日环境，也不重新认证历史成绩；输出正被运行进程占用时拒绝改写。
+`report` 自动识别 workflow 或旧 tune 产物，根据保存快照重建 Markdown，不调用模型、研究服务或硬件。工作流会核对快照指纹、事件链和 checkpoint，并从保存的测量重新核算 ABA／CI 裁决；`integrity_valid: false` 时拒绝整份重建，原始失败证据仍保留。旧 `tune` 仅校验契约指纹，没有相同的状态/事件链保护。此命令不重新验证今日环境，也不重新认证历史成绩；输出正被运行进程占用时拒绝改写。开放模式和旧 Agent 应分别使用 `autotune-report`、`agent-report`，不能将其目录交给此处的 `report`。
 
 `best-contract.json` 可用 `tune --planner random` 在新目录复测固定赢家，但不保留工作流的 ABA 分组。需要同样的 ABA 证据，应以原工作流启动新实验。正式交付同时保存配置、环境说明、原始测量、质量结果、确认结果，并在客户保留集复验。
 
@@ -507,8 +507,8 @@ v0.6.0 只在同一次完整性检查内对多个 profile 共用的源码、解�
 |---|---|
 | `doctor` | 无参数；本机版本/设备信息 |
 | `validate` | `--config FILE`；校验单契约 |
-| `workflow-validate` | `--config FILE`；校验完整工作流与策略 |
-| `workflow` | `--config FILE --output DIR [--workdir DIR] [--resume]`；推荐主入口 |
+| `workflow-validate` | `--config FILE [--estimate]`；校验完整工作流与策略，可显示确认成本粗估 |
+| `workflow` | `--config FILE --output DIR [--workdir DIR] [--resume]`；本页的旧受控模式入口 |
 | `workflow-demo` | `[--output DIR]`，默认 `runs/workflow-demo`；CPU 全流程演示 |
 | `research-agent` | `[--port 8766] [--mcp-endpoint URL] [--timeout 60]`；本机 A2A 桥接 |
 | `workload-analyze` | `--input JSONL --output JSON`；请求遥测统计 |
@@ -529,7 +529,7 @@ v0.6.0 只在同一次完整性检查内对多个 profile 共用的源码、解�
 | 服务启动失败/OOM | 查 trial 服务日志、安装版本、卡占用、模型路径、并行规模和内存余量 |
 | 端口或资源锁被占用 | 使用专用空闲端口；等待同资源作业结束，勿接管已有生产服务 |
 | API 401/限流/JSON 错误 | 检查密钥变量和模型 ID；按供应商支持关闭 JSON mode/temperature；查看回退事件 |
-| DeepWiki/A2A 失败 | 检查网络和本机桥接；需要继续无新证据搜索时显式选择 `on_error: continue` |
+| DeepWiki/A2A 失败 | 检查网络和本机桥接；仅旧 `workflow` 可用 `on_error: continue` 继续无新研究证据的受限搜索 |
 | 指标缺失/错误率不一致 | 查看原始 JSON 和 adapter；不要补虚假零值；核对计数分母 |
 | TPOT 缺失 | 查看流块、真实 usage 和 TPOT 覆盖率；不可用观察子集代替全量门槛 |
 | ABA 为 INVALID | 检查基线漂移、预算是否容纳完整组、文件或环境是否变化 |

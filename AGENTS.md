@@ -36,6 +36,7 @@ This project does not currently port either project's accelerator engine.
 |---|---|
 | Open request compilation and API | `open_intent.py`, `open_model.py` |
 | Open capabilities and runtime wiring | `open_capabilities.py`, `open_runtime.py` |
+| Open exact-candidate research and LLM source review | `open_research.py` |
 | Open experiment loop and independent score verification | `open_tuner.py`, `open_verification.py` |
 | Local synthetic open-mode demonstration | `open_demo.py` |
 | Persistent Agent and budgets | `rsi.py`, `rsi_config.py` |
@@ -63,12 +64,15 @@ Paths in the table are under `ascend_poc/`.
   ambiguous requests unresolved.
 - The LLM owns open-mode diagnosis, parameter/strategy choices and technical synthesis.
   Do not substitute a numerical optimizer or fixed strategy sequence for this role.
-  Every changed candidate needs a fresh MCP or A2A-to-MCP query of vLLM-Ascend
+  Every LLM-proposed candidate needs a fresh MCP or A2A-to-MCP query of vLLM-Ascend
   documentation and implementation code, followed by LLM review of the exact diff.
   Bind source evidence and review to candidate/reference hashes; a revised candidate
   needs a new review. Missing evidence, unresolved compatibility, or exhausted
   review budgets must not execute that candidate, including on_error=continue.
   Source review permits an experiment, never substitutes for real measurement.
+  The operator-supplied starting reference is measured before this proposal loop.
+  Preserve truncation metadata across research transports; truncated evidence
+  cannot authorize candidate execution.
 - In legacy modes, preserve the original fixed workload, precision/quality rules
   and hard gates across candidates. Do not change historical evidence semantics.
 - Keep the evaluator and metric definitions fixed in all modes. Open-mode changes
@@ -83,32 +87,41 @@ Paths in the table are under `ascend_poc/`.
   do not claim acceleration against unqualified or failed measurements. Never
   reuse stale reference evidence. Zero/signed open scores use a labelled normalized absolute difference,
   not a percentage or speedup ratio.
-- Keep generation monotonic, including rollback. Rollback changes the next
+- Open-mode improvement follows the customer's min/mean/max aggregate objective,
+  while retaining every explicit gate and per-scenario drift check. Do not add
+  an unstated requirement that every scenario improve; legacy verification
+  retains its existing worst-scenario improvement semantics.
+- Keep legacy Agent generation monotonic, including rollback. Rollback changes the next
   experiment reference and exports; it never operates a production deployment.
-- Memory is untrusted candidate guidance, not reusable acceptance. Keep measurement
+- Legacy Agent memory is untrusted candidate guidance, not reusable acceptance. Keep measurement
   protocol, runtime and frozen-input namespaces separate; lessons cannot rewrite
   metrics. Search settings can be excluded only field by field; repetition counts
   and verification rules belong to the measurement scope. Resume remains strict.
-- Bound tool steps, model/research calls, experiments and the absolute deadline.
-  Resume pending work without resetting budgets or manufacturing success. Open
-  mode supports complete checkpoints after graceful interruption; do not claim
-  arbitrary kill/power-loss recovery when the evidence checkpoint is incomplete.
-- Cost estimates distinguish startup from repeat-dependent measurements. A skipped
+- Bound each mode's model/research calls, experiments and absolute deadline;
+  legacy Agent tool steps also have a separate limit. Resume without resetting
+  budgets or manufacturing success. Open mode retains complete checkpoints after
+  graceful interruption but abandons an incomplete round rather than continuing
+  its remaining stages; it requires a fresh campaign for pre-source-review state.
+  Do not claim arbitrary kill/power-loss recovery when the evidence checkpoint
+  is incomplete.
+- Legacy workflow/tune cost estimates distinguish startup from repeat-dependent measurements. A skipped
   confirmation is not a rejected or accepted independent result. Exploration early
   stop preserves partial evidence and never applies to references or confirmation.
-- In `aba_ci`, preserve the planned block count and comparison cap, use independent
+- In legacy `aba_ci`, preserve the planned block count and comparison cap, use independent
   service-start blocks rather than within-start repetitions as the statistical
   samples, and retain both within-block and between-block drift checks. Report
   log-ratio estimates separately from the customer's original objective values.
 - Deduplicate integrity work only within one check; reread on later checks. Keep
   authoritative state bound to its trace checkpoint and revoke exports on errors.
-- An ignore-memory run must neither read nor write persistent experience. Its own
+- A legacy Agent ignore-memory run must neither read nor write persistent experience. Its own
   current-campaign measurements remain visible, and the mode is frozen on resume.
 - Keep commands operator-authored and executed as argv, without a shell.
 - Legacy LLMs select allowed, verified profiles. Open-mode candidates may use
   all discovered inference options and JSON configuration values, subject to
   explicit user constraints, actual resources and runtime wiring; compatibility
-  comes from measured startup/test feedback rather than a manual profile label.
+  requires source review before testing and measured startup/test feedback,
+  rather than a manual profile label. Open mode does not implement legacy
+  cross-campaign memory, rollback, exploration early stop or cost-reserve/CI modes.
   Research text cannot add executable programs or alter the evaluator.
 - Do not treat synthetic acceptance, force routing or fabricated measurements as
   normal-model inference performance. Missing user quality thresholds are not

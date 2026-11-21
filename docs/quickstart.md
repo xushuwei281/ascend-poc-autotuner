@@ -2,6 +2,8 @@
 
 v0.7.0 的推荐入口是 **[自然语言全参数调优](open-tuning.md)**。新模式用一份 runtime 接线加一段需求，未明确限制的参数由 Agent 搜索；下文原 `agent-demo` 与三文件配置保留为**受控模式复现路径**，不会自动改成开放搜索。
 
+新模式每次提出候选后，还须通过 MCP 或 A2A→MCP 核查 vLLM-Ascend 文档与实现代码，由大模型审查本轮具体改动。证据不足或兼容性仍有疑问时不执行该候选；审查通过后仍需真实测量和独立复核。
+
 已经下载仓库并准备好 Linux / Python 3.10+ 时，可以先运行新的无卡演示：
 
 ```bash
@@ -19,8 +21,9 @@ python3 -m ascend_poc autotune-report --output runs/my-open-demo
 
 | 你现在想做什么 | 使用哪条路径 | 能证明什么 |
 |---|---|---|
-| 看懂 Agent 怎么调优，展示给同事 | 第 2–4 节：本地演示 | 程序的工具调用、测量、复核与报告链路可运行 |
-| 在客户的昇腾服务器上测出可交付成绩 | 第 6–9 节：真实 PoC | 需要真实模型、负载、性能与质量评测；成绩由实测决定 |
+| 用文字需求开始开放调优 | [新模式指南](open-tuning.md)，或本页开头的 `autotune-demo` | 演示验证程序链路；真实结果需接入现场环境测量 |
+| 看懂原受控 Agent 怎么调优，展示给同事 | 第 2–4 节：受控模式本地演示 | 程序的工具调用、测量、复核与报告链路可运行 |
+| 用原受控模式完成真实 PoC | 第 6–9 节：固定契约与获准策略 | 需要真实模型、负载、性能与质量评测；成绩由实测决定 |
 | 审核为什么某个方案胜出 | 查看报告及实验文件 | 是否达标、是否复测、提升依据和失败原因 |
 
 演示中的模型回答、研究内容和性能数字都是预设的合成数据。本地演示成功，不代表真实大模型会提出好方案，也不代表昇腾硬件已得到加速。
@@ -48,16 +51,16 @@ sudo apt install python3 git
 
 ### 获取代码：选一种方式即可
 
-**方式 A：已经配置好 GitHub 的 Git 访问权限。**
+**方式 A：使用 Git 克隆。**
 
 ```bash
 git clone https://github.com/xushuwei281/ascend-poc-autotuner.git
 cd ascend-poc-autotuner
 ```
 
-当前仓库需要相应 GitHub 访问权限。若报 `Repository not found` 或认证失败，先用有权限的账号打开仓库，核对授权；不要把 API key 或 GitHub token 写进克隆地址。
+当前仓库公开，使用上述 HTTPS 地址通常无需登录。若克隆失败，先在浏览器核对仓库地址与网络访问；不要把 API key 或 GitHub token 写进克隆地址。
 
-**方式 B：不熟悉 Git。**登录有权限的 GitHub 账号，打开 [仓库首页](https://github.com/xushuwei281/ascend-poc-autotuner)，选择绿色 **Code → Download ZIP**，解压后在该文件夹打开 Linux 终端。ZIP 下载的目录通常叫 `ascend-poc-autotuner-main`；进入实际解压目录，不要直接复制一个不存在的路径。
+**方式 B：不熟悉 Git。**打开 [仓库首页](https://github.com/xushuwei281/ascend-poc-autotuner)，选择绿色 **Code → Download ZIP**，解压后在该文件夹打开 Linux 终端。ZIP 下载的目录通常叫 `ascend-poc-autotuner-main`；进入实际解压目录，不要直接复制一个不存在的路径。
 
 两种方式最终都应位于**仓库根目录**，也就是同时含有 `README.md`、`ascend_poc/`、`examples/` 的文件夹。检查：
 
@@ -134,15 +137,15 @@ python3 -m ascend_poc agent-report --output runs/my-ci-demo
 |---|---|
 | `python3: command not found` | 安装 Python，再确认版本至少为 3.10 |
 | `No module named ascend_poc` | 回到含 `README.md` 和 `ascend_poc/` 的仓库根目录 |
-| GitHub 404、克隆失败 | 核对仓库访问授权；有权限时也可在网页下载 ZIP |
+| GitHub 404、克隆失败 | 核对仓库地址与网络访问；网页可访问时也可下载 ZIP |
 | `requires a fresh, empty output directory` | 换新的 `--output` 路径；不要删除旧证据来掩盖错误 |
 | 运行后不知道看哪里 | 找终端打印的报告路径，或执行上面的 `cat` 命令 |
 | 演示报端口或进程错误 | 使用允许本地回环连接和创建子进程的 Linux 环境；检查是否被沙箱或系统策略限制 |
 | `agent-report` 报完整性错误 | 保留原输出，核对是否改动过配置、代码或记录；不要手动改成绩文件 |
 
-## 6. 接真实昇腾环境：先把工作分清
+## 6. 受控模式接真实昇腾环境：先把工作分清
 
-跑通演示后，真实 PoC 还需要客户现场接入。建议按下表分工；一个人可以承担多个角色。
+本节至第 9 节继续使用旧 `agent/workflow` 的固定契约与获准策略。开放 `autotune` 的接入方式见 [运行接线](open-tuning.md#2-客户需求与运行接线分开)，不要求预先批准每个候选 profile。跑通演示后，真实 PoC 还需要客户现场接入。建议按下表分工；一个人可以承担多个角色。
 
 | 角色 | 需要准备的内容 | 完成标志 |
 |---|---|---|
