@@ -31,12 +31,86 @@ class OpenVerificationTests(unittest.TestCase):
         json.dumps(result, allow_nan=False)
         return result
 
-    def test_positive_measurements_match_original_protocol_exactly(self):
+    def test_single_positive_scene_preserves_ratio_and_legacy_protocol(self):
+        self.contract['scenarios'] = self.contract['scenarios'][:1]
         a, c, b = record((100, 150)), record((125, 180)), record((100, 150))
+        for item in (a, c, b):
+            item['scenario_results'] = item['scenario_results'][:1]
         for direction in ('maximize', 'minimize'):
             self.contract['objective']['direction'] = direction
-            self.assertEqual(evaluate_open_aba(self.contract, a, c, b, self.settings),
-                             evaluate_aba(self.contract, a, c, b, self.settings))
+            result = evaluate_open_aba(self.contract, a, c, b, self.settings)
+            legacy = evaluate_aba(self.contract, a, c, b, self.settings)
+            self.assertEqual(result['relative_improvement'], legacy['relative_improvement'])
+            self.assertEqual(result['accepted'], legacy['accepted'])
+            self.assertEqual(result['improved'], legacy['improved'])
+            self.assertEqual(result['baseline_drift'], legacy['baseline_drift'])
+            self.assertEqual(result['scenarios'], legacy['scenarios'])
+            self.assertEqual(result['objective_comparison']['before'], 100)
+
+    def test_customer_aggregate_can_improve_despite_one_scene_regressing(self):
+        cases = [
+            ('mean', 'maximize', (100, 100), (200, 90), 100, 145, .45),
+            ('min', 'maximize', (100, 1000), (120, 900), 100, 120, .2),
+            ('max', 'maximize', (100, 200), (90, 300), 200, 300, .5),
+            ('mean', 'minimize', (100, 100), (150, 40), 100, 95, 100 / 95 - 1),
+            ('max', 'minimize', (100, 1000), (110, 800), 1000, 800, .25),
+            ('min', 'minimize', (100, 1000), (80, 1100), 100, 80, .25),
+        ]
+        for aggregation, direction, a, c, old_score, new_score, gain in cases:
+            with self.subTest(aggregation=aggregation, direction=direction):
+                self.contract['objective'].update(scenario_aggregation=aggregation, direction=direction)
+                result = self.verify(a=a, c=c)
+                self.assertTrue(result['accepted'])
+                self.assertTrue(result['improved'])
+                self.assertAlmostEqual(result['relative_improvement'], gain)
+                comparison = result['objective_comparison']
+                self.assertEqual(comparison['before'], old_score)
+                self.assertEqual(comparison['candidate'], new_score)
+                self.assertEqual(comparison['scenario_aggregation'], aggregation)
+                # Legacy modes retain their original all-scenes comparison.
+                self.assertFalse(evaluate_aba(self.contract, record(a), record(c), record(a),
+                                              self.settings)['improved'])
+
+    def test_aggregate_gain_does_not_bypass_explicit_scenario_gate(self):
+        self.contract['objective']['scenario_aggregation'] = 'mean'
+        self.contract['scenarios'][1]['requirements']['score'] = {'min': 95}
+        result = self.verify(a=(100, 100), c=(200, 90))
+        self.assertFalse(result['accepted'])
+        self.assertFalse(result['improved'])
+        self.assertEqual(result['verdict'], 'REJECTED')
+
+    def test_aggregate_gain_does_not_hide_drifting_reference_scene(self):
+        self.contract['objective']['scenario_aggregation'] = 'mean'
+        result = self.verify(a=(100, 100), b=(80, 120), c=(300, 100))
+        self.assertFalse(result['valid'])
+        self.assertFalse(result['improved'])
+
+    def test_signed_and_zero_aggregates_use_customer_objective(self):
+        cases = [
+            ('mean', 'maximize', (-100, -100), (-50, -110), -100, -80, .2),
+            ('min', 'maximize', (-100, -10), (-80, -20), -100, -80, .2),
+            ('max', 'maximize', (-100, -10), (-110, -8), -10, -8, .2),
+            ('mean', 'minimize', (-100, -100), (-150, -90), -100, -120, .2),
+            ('mean', 'maximize', (-10, 10), (-5, 9), 0, 2, 2),
+        ]
+        for aggregation, direction, a, c, old_score, new_score, gain in cases:
+            with self.subTest(aggregation=aggregation, direction=direction, baseline=a):
+                self.contract['objective'].update(scenario_aggregation=aggregation, direction=direction)
+                result = self.verify(a=a, c=c)
+                self.assertTrue(result['improved'])
+                self.assertEqual(result['method'], 'scaled_absolute_difference')
+                self.assertIsNone(result['relative_improvement'])
+                self.assertAlmostEqual(result['normalized_improvement'], gain)
+                comparison = result['objective_comparison']
+                self.assertEqual(comparison['before'], old_score)
+                self.assertEqual(comparison['candidate'], new_score)
+                self.assertIsNone(comparison['speedup'])
+
+    def test_signed_cancellation_cannot_hide_aggregate_reference_drift(self):
+        self.contract['objective']['scenario_aggregation'] = 'mean'
+        result = self.verify(a=(-100, 100), b=(-99, 101), c=(-50, 100))
+        self.assertFalse(result['valid'])
+        self.assertEqual(result['objective_comparison']['baseline_drift'], 1)
 
     def test_minimizing_error_rate_can_accept_a_zero_error_candidate(self):
         self.contract['objective']['direction'] = 'minimize'

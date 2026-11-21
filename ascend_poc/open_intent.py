@@ -47,6 +47,12 @@ Use an exact nonempty substring of request for every source_quote and every
 evidence value. Never invent a quote. Bounds are inclusive; convert units into the
 metric's actual unit. engine keys use canonical kebab-case without leading --;
 env keys use uppercase variable names; workload keys use variable names.
+Map explicit conditions to the supplied workload_parameters, environment_names
+and engine_capabilities keys and descriptions. Do not guess generic field names
+when the adapter uses different names. These catalogs describe executable
+capabilities, not additional customer constraints. If an explicit condition has
+no available field, preserve the condition as unresolved rather than inventing
+a key or silently dropping it.
 model constraints use key id, family or precision; hardware constraints use key
 device_type, device_count or devices. Hardware describes the available host, not a
 candidate's TP layout. 'in' values are nonempty lists. min/max are numeric only.
@@ -197,7 +203,7 @@ def _check_contradictions(conditions):
                 raise ValueError(f'Contradictory constraints for {scope}.{key}')
 
 
-def validate_intent(value, text, runtime):
+def validate_intent(value, text, runtime, caps=None):
     """Normalize sourced user constraints and flag unavailable goals/resources.
 
     Runtime requirements and baseline values are intentionally never inherited.
@@ -245,6 +251,23 @@ def validate_intent(value, text, runtime):
     for condition in intent['constraints']:
         _validate_constraint(condition, text)
     _check_contradictions(intent['constraints'])
+    # Check wiring names before experiments. A syntactically valid but invented
+    # key cannot be repaired by candidate search without changing customer intent.
+    # Partial callers without a discovered catalog retain structural validation;
+    # the campaign supplies the actual installed engine capabilities.
+    connected = {}
+    if 'workload_parameters' in runtime:
+        connected['workload'] = runtime['workload_parameters']
+    if 'discovery' in runtime:
+        connected['env'] = runtime['discovery'].get('env_names', [])
+    if caps is not None:
+        if not isinstance(caps, dict) or not isinstance(caps.get('flags'), dict):
+            raise ValueError('Invalid discovered capability catalog')
+        connected['engine'] = caps['flags']
+    for condition in intent['constraints']:
+        scope, key = condition['scope'], condition['key']
+        if scope in connected and key not in connected[scope]:
+            _append_issue(intent, f'Explicit {scope}.{key} constraint has no connected tuning field.')
     for metric in sorted({objective['metric']} | set(requirements)):
         if metric not in connected_metrics:
             _append_issue(intent, f'Metric {metric} is not connected in runtime.metric_names.')
@@ -261,7 +284,7 @@ def validate_intent(value, text, runtime):
     return intent
 
 
-def compile_intent(text, runtime, client, remaining_s):
+def compile_intent(text, runtime, client, remaining_s, caps=None):
     """Ask once, then validate; never send model paths, commands or credentials."""
     _text(text, 'Customer text', 32000)
     metrics = sorted(_metric_names(runtime))
@@ -272,9 +295,22 @@ def compile_intent(text, runtime, client, remaining_s):
     hardware = runtime.get('hardware', {})
     payload = {'stage': 'compile_intent', 'request': text, 'available_metric_names': metrics, 'models': inventory,
                'hardware': {key: hardware[key] for key in ('device_type', 'device_count', 'devices') if key in hardware},
+               'workload_parameters': {name: {key: copy.deepcopy(spec[key]) for key in
+                   ('type', 'minimum', 'maximum', 'choices', 'description') if key in spec}
+                   for name, spec in runtime.get('workload_parameters', {}).items()},
+               'environment_names': list(runtime.get('discovery', {}).get('env_names', [])),
                'policy': 'Only explicitly written customer constraints are fixed. Unspecified settings remain tunable.'}
+    if caps is not None:
+        if not isinstance(caps, dict) or not isinstance(caps.get('flags'), dict):
+            raise ValueError('Invalid discovered capability catalog')
+        payload['engine_capabilities'] = {
+            name: {key: copy.deepcopy(spec[key]) for key in
+                   ('kind', 'negative', 'choices', 'metavar', 'nargs', 'encoding') if key in spec}
+            for name, spec in caps['flags'].items()}
+        for name, spec in caps['flags'].items():
+            payload['engine_capabilities'][name]['help'] = str(spec.get('help', ''))[:180]
     value = client.ask(INTENT_SYSTEM, payload, remaining_s)
-    return validate_intent(value, text, runtime)
+    return validate_intent(value, text, runtime, caps=caps)
 
 
 def check_candidate(intent, candidate, runtime):

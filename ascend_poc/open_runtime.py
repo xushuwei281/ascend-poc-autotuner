@@ -317,8 +317,12 @@ def validate_runtime(value, base_dir=None):
         raise ValueError('measurement wiring cannot reference the planner API key')
 
     research = _object(config.setdefault('research', {}), 'research')
-    _keys(research, {'endpoint', 'repository', 'timeout_s', 'max_calls', 'on_error'}, 'research')
-    validate_endpoint(research.setdefault('endpoint', 'https://mcp.deepwiki.com/mcp'))
+    _keys(research, {'transport', 'endpoint', 'repository', 'timeout_s', 'max_calls', 'on_error'}, 'research')
+    transport = research.setdefault('transport', 'mcp')
+    if not isinstance(transport, str) or transport not in {'mcp', 'a2a'}:
+        raise ValueError('research.transport must be mcp or a2a')
+    default_endpoint = 'http://127.0.0.1:8766/a2a' if transport == 'a2a' else 'https://mcp.deepwiki.com/mcp'
+    validate_endpoint(research.setdefault('endpoint', default_endpoint))
     if research.setdefault('repository', 'vllm-project/vllm-ascend') != 'vllm-project/vllm-ascend':
         raise ValueError('research.repository must be vllm-project/vllm-ascend')
     _number(research.setdefault('timeout_s', 60), 'research.timeout_s', minimum=.01)

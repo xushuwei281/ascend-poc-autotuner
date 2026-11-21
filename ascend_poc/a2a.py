@@ -144,7 +144,11 @@ def _evidence(value: dict, repo: str) -> dict:
     tool = value.get("tool", "ask_wiki_question")
     if not isinstance(tool, str) or len(tool) > 100:
         raise A2AError("A2A research tool name is invalid.")
-    return {"answer": answer, "sources": links, "repository": repo, "transport": "a2a", "tool": tool}
+    truncated = value.get("truncated", False)
+    if type(truncated) is not bool:
+        raise A2AError("A2A research evidence has an invalid truncation flag.")
+    return {"answer": answer, "sources": links, "repository": repo, "transport": "a2a",
+            "tool": tool, "truncated": truncated}
 
 
 class A2AResearchClient:

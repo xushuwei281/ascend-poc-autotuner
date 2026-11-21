@@ -124,6 +124,36 @@ class A2ATests(unittest.TestCase):
             self.assertEqual(task["artifacts"][0]["parts"][0]["data"]["answer"], evidence["answer"])
             self.assertNotIn("history", task)
 
+    def test_truncated_evidence_survives_bridge_and_cannot_authorize_candidate(self):
+        from ascend_poc.open_research import candidate_changes, validate_review
+        doc = "https://docs.vllm.ai/projects/ascend/en/latest/user_guide/feature_guide/graph_mode.html"
+        code = "https://github.com/vllm-project/vllm-ascend/blob/main/vllm_ascend/envs.py"
+        class TruncatedResearcher(FakeResearcher):
+            def ask(self, repo, question, remaining_s=None):
+                evidence = super().ask(repo, question, remaining_s)
+                evidence.update(truncated=True, sources=[doc, code])
+                return evidence
+        with bridge(TruncatedResearcher()) as server:
+            evidence = A2AResearchClient(server.endpoint).ask(REPO, "Review exact candidate")
+        self.assertIs(evidence["truncated"], True)
+        evidence["id"] = "research-1"
+        reference, candidate = {"engine": {"x": 1}}, {"engine": {"x": 2}}
+        review = {"decision": "run", "reason": "The fixture claims source support.",
+                  "checked_changes": [row["path"] for row in candidate_changes(reference, candidate)],
+                  "sources": [doc, code], "uncertainties": [], "evidence_id": evidence["id"]}
+        with self.assertRaisesRegex(ValueError, "truncated"):
+            validate_review(review, evidence, reference, candidate)
+
+    def test_invalid_truncation_flags_are_rejected(self):
+        for flag in ("true", 1, None):
+            def change(stage, data):
+                if stage == "response":
+                    data["result"]["artifacts"][0]["parts"][0]["data"]["truncated"] = flag
+                return data
+            with self.subTest(flag=flag), alternate_agent(change) as endpoint:
+                with self.assertRaisesRegex(A2AError, "truncation"):
+                    A2AResearchClient(endpoint).ask(REPO, "q")
+
     def test_cancel_terminal_and_missing_task_errors(self):
         with bridge() as server:
             task = rpc(server, "message/send", query_params())["result"]
