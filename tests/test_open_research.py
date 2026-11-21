@@ -119,6 +119,15 @@ class OpenResearchTests(TestCase):
         with self.assertRaisesRegex(ValueError, '24000-character'):
             build_review_question(self.runtime, self.intent, self.reference, self.candidate, {})
 
+    def test_a2a_question_respects_existing_transport_limit(self):
+        self.candidate['engine']['large-config'] = 'x' * 7000
+        question = build_review_question(self.runtime, self.intent, self.reference, self.candidate, {})
+        self.assertGreater(len(question), 16000)
+        self.assertLessEqual(len(question), 24000)
+        self.runtime['research'] = {'transport': 'a2a'}
+        with self.assertRaisesRegex(ValueError, '16000-character'):
+            build_review_question(self.runtime, self.intent, self.reference, self.candidate, {})
+
     def test_review_is_bound_to_current_evidence_and_exact_candidate_hashes(self):
         result = validate_review(self.review, self.evidence, self.reference, self.candidate)
         self.assertEqual(result['evidence_id'], self.evidence['id'])

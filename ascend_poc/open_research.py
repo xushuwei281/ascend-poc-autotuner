@@ -11,7 +11,7 @@ import json
 import math
 from urllib.parse import unquote, urlsplit
 
-from .a2a import A2AResearchClient
+from .a2a import A2AResearchClient, MAX_QUESTION
 from .deepwiki import DeepWikiClient
 from .rsi_config import digest
 
@@ -169,8 +169,9 @@ def build_review_question(runtime, intent, reference, candidate, packages):
         'The planning LLM will make the final review decision, followed by measured '
         'startup and independent acceptance tests.\n' +
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False))
-    if len(question) > 24000:
-        raise ValueError('Candidate review question exceeds the 24000-character research limit')
+    limit = MAX_QUESTION if runtime.get('research', {}).get('transport') == 'a2a' else 24000
+    if len(question) > limit:
+        raise ValueError(f'Candidate review question exceeds the {limit}-character research limit')
     return question
 
 

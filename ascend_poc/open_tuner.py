@@ -646,7 +646,8 @@ def run_autotune(runtime, request_text, output, *, workdir=None, plan_only=False
                             diagnosis=item['analysis'], evidence=evidence, evidence_ids=ids)), ids)
                         item['proposed_candidate'] = copy.deepcopy(proposal['candidate'])
                         candidate = validate_candidate(runtime, proposal['candidate'], intent, caps)
-                        if any(e.get('candidate') == candidate for e in state['experiments'][:-1]):
+                        if any(e.get('candidate') == candidate and 'exploration_trial' in e
+                               for e in state['experiments'][:-1]):
                             raise ValueError('Candidate duplicates a previously attempted complete configuration')
                         item.update({k: proposal[k] for k in ('hypothesis', 'expected_effect', 'evidence_ids')})
                         item['candidate'] = candidate

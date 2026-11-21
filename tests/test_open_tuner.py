@@ -433,3 +433,20 @@ class OpenTunerTests(TestCase):
         factory.assert_called_once_with('http://127.0.0.1:8766/a2a', timeout_s=10)
         self.assertEqual(state['experiments'][0]['source_review']['decision'], 'run')
         self.assertEqual(len(researcher.calls), 2)
+
+    def test_transient_source_failure_allows_same_unmeasured_candidate_to_be_reviewed_again(self):
+        self.raw['budget']['max_experiments'] = 2
+        self.raw['research']['on_error'] = 'continue'
+        class TransientFailure(Research):
+            attempts = 0
+            def ask(self, repository, question, remaining_s=None):
+                self.attempts += 1
+                if self.attempts == 2:
+                    raise DeepWikiError('Temporary candidate research failure')
+                return super().ask(repository, question, remaining_s)
+        state, _, runner, _ = self.run_campaign(
+            [demo_candidate(0), demo_candidate(0)], researcher=TransientFailure())
+        self.assertEqual(state['experiments'][0]['status'], 'source_review_unavailable')
+        self.assertEqual(state['experiments'][1]['status'], 'promoted')
+        self.assertEqual(len(runner.calls), 5)
+        self.assertEqual(state['counters']['research_calls'], 4)
